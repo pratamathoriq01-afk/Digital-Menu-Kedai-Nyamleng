@@ -1,0 +1,400 @@
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  X, 
+  CheckCircle2, 
+  Copy, 
+  Bell, 
+  Bike, 
+  ShoppingBag, 
+  ShieldCheck, 
+  Check,
+  ChefHat,
+  Flame,
+  Sparkles,
+  Clock
+} from 'lucide-react';
+import { useCartStore } from '@/store/useCartStore';
+import { OFFICIAL_STORE_EMAIL, OFFICIAL_STORE_WA, OrderStatus, STORE_LOCATION } from '@/types/pos';
+
+export const OrderStatusModal: React.FC = () => {
+  const { isOrderStatusOpen, toggleOrderStatus, activeOrder } = useCartStore();
+  const [currentStatus, setCurrentStatus] = useState<OrderStatus>('CONFIRMED');
+  const [isCopied, setIsCopied] = useState(false);
+  const [notificationToast, setNotificationToast] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Mounted Hydration Safety Guard
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Realtime Timestamp Tracker (Seconds elapsed since order creation)
+  const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
+
+  // Calculate logical prep time in minutes based on ordered items
+  const prepTimeMinutes = useMemo(() => {
+    if (!activeOrder || activeOrder.items.length === 0) return 7;
+
+    const maxItemPrep = Math.max(
+      ...activeOrder.items.map((i) => i.menuItem.preparationTimeMinutes || 7)
+    );
+    const totalItemQty = activeOrder.items.reduce((acc, i) => acc + i.quantity, 0);
+
+    // Formula: Max prep time + 1 min per extra item (Min: 7 min, Max: 18 min)
+    const calculatedMinutes = Math.min(Math.max(maxItemPrep + Math.floor((totalItemQty - 1) * 1), 7), 18);
+    return calculatedMinutes;
+  }, [activeOrder]);
+
+  const totalTargetSeconds = prepTimeMinutes * 60; // Exact real-time seconds (e.g. 7 min = 420s)
+
+  // Calculate target ETA completion time (e.g. 05:48 - 05:53 WIB)
+  const etaWindowString = useMemo(() => {
+    if (!activeOrder) return '';
+    const createdDate = new Date(activeOrder.createdAt);
+    const targetDate = new Date(createdDate.getTime() + totalTargetSeconds * 1000);
+
+    const formatTime = (d: Date) =>
+      d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+    return `Selesai ~ ${formatTime(targetDate)} WIB (± ${prepTimeMinutes} Menit)`;
+  }, [activeOrder, totalTargetSeconds, prepTimeMinutes]);
+
+  // Realtime 1-Second Clock Ticker
+  useEffect(() => {
+    if (!isOrderStatusOpen || !activeOrder) return;
+
+    setNowTimestamp(Date.now());
+    const interval = setInterval(() => {
+      setNowTimestamp(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isOrderStatusOpen, activeOrder]);
+
+  // Derive exact real-time seconds remaining and status
+  const orderTimeMs = activeOrder ? new Date(activeOrder.createdAt).getTime() : Date.now();
+  const elapsedSeconds = Math.max(Math.floor((nowTimestamp - orderTimeMs) / 1000), 0);
+  const remainingSeconds = Math.max(totalTargetSeconds - elapsedSeconds, 0);
+
+  // Sync current status with real-time seconds
+  useEffect(() => {
+    if (!activeOrder) return;
+
+    if (elapsedSeconds < 10) {
+      if (currentStatus !== 'CONFIRMED') {
+        setCurrentStatus('CONFIRMED');
+        setNotificationToast(`[POS Kedai] Pesanan #${activeOrder.orderId} diterima oleh Kasir!`);
+      }
+    } else if (remainingSeconds > 0) {
+      if (currentStatus !== 'KITCHEN_PROCESSING') {
+        setCurrentStatus('KITCHEN_PROCESSING');
+        setNotificationToast(`[Dapur Kedai] Koki sedang memasak pesanan Anda (Estimasi ${prepTimeMinutes} Menit)...`);
+      }
+    } else {
+      if (currentStatus !== 'READY') {
+        setCurrentStatus('READY');
+        setNotificationToast(`[Kedai Nyamleng] Pesanan #${activeOrder.orderId} Selesai & Siap!`);
+      }
+    }
+  }, [elapsedSeconds, remainingSeconds, activeOrder, prepTimeMinutes, currentStatus]);
+
+  // Auto-dismiss notification toast
+  useEffect(() => {
+    if (notificationToast) {
+      const timer = setTimeout(() => setNotificationToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [notificationToast]);
+
+  if (!isMounted || !isOrderStatusOpen || !activeOrder) return null;
+
+  const formatRupiah = (amount: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const handleCopyOrderId = () => {
+    navigator.clipboard.writeText(activeOrder.orderId);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  // Progress Bar Percentage (0% - 100%)
+  const progressPercent = Math.min(
+    Math.round((elapsedSeconds / totalTargetSeconds) * 100),
+    100
+  );
+
+  // Digital Minute & Second Clock string (e.g. "06:45")
+  const formatTimerDigital = (secondsLeft: number) => {
+    const mins = Math.floor(secondsLeft / 60);
+    const secs = secondsLeft % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const steps = [
+    {
+      id: 'CONFIRMED',
+      label: 'Diterima POS',
+      desc: 'Kasir mengonfirmasi pesanan',
+      time: 'Tercatat di POS',
+    },
+    {
+      id: 'KITCHEN_PROCESSING',
+      label: 'Dapur Memproses',
+      desc: 'Koki sedang memasak pesanan Anda',
+      time: remainingSeconds > 0 ? `Tersisa ${formatTimerDigital(remainingSeconds)}` : 'Selesai dimasak',
+    },
+    {
+      id: 'READY',
+      label: activeOrder.orderType === 'DELIVERY' ? 'Siap Dikirim' : 'Siap Ambil',
+      desc: activeOrder.orderType === 'DELIVERY' ? 'Kurir mengambil pesanan' : 'Silakan ambil di konter kasir',
+      time: remainingSeconds === 0 ? 'Siap Disajikan!' : 'Menunggu dapur',
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+      <div 
+        className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 sm:p-5 bg-charcoal text-white flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="relative">
+              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+            </div>
+            <div>
+              <h2 className="font-extrabold text-base">Status Tracking Pesanan</h2>
+              <p className="text-[11px] text-gray-300">
+                Lacak Status Dapur Realtime • {activeOrder.orderType === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => toggleOrderStatus(false)}
+            className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+        </div>
+
+        {/* Scrollable Body */}
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 text-charcoal">
+
+          {/* Toast Alert Notification */}
+          {notificationToast && (
+            <div className="p-3 bg-amber-500 text-white rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-md animate-slide-down">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-white animate-bounce" />
+                <span>{notificationToast}</span>
+              </div>
+              <button 
+                onClick={() => setNotificationToast(null)}
+                className="text-white/80 hover:text-white text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Live Order Hero Status Card */}
+          <div className="bg-gradient-to-br from-nyamleng-500 to-nyamleng-600 text-white rounded-3xl p-5 shadow-lg relative overflow-hidden space-y-4">
+            
+            {/* Ambient Background Blur */}
+            <div className="absolute -right-8 -bottom-8 w-36 h-36 bg-white/10 rounded-full blur-xl pointer-events-none" />
+
+            {/* Order ID & Copy Action */}
+            <div className="flex justify-between items-start relative z-10">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-amber-200 block">
+                  Nomor Transaksi Struk
+                </span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <h3 className="text-xl font-black tracking-tight">{activeOrder.orderId}</h3>
+                  <button
+                    onClick={handleCopyOrderId}
+                    className="p-1 bg-white/15 hover:bg-white/25 rounded-lg transition-all text-white text-xs flex items-center gap-1"
+                    title="Salin Nomor Pesanan"
+                  >
+                    {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Order Mode Badge */}
+              <span className="text-xs font-extrabold bg-white/20 backdrop-blur-md text-white px-3 py-1 rounded-full border border-white/20 shadow-xs flex items-center gap-1.5">
+                {activeOrder.orderType === 'DELIVERY' ? (
+                  <>
+                    <Bike className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Delivery</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingBag className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Takeaway</span>
+                  </>
+                )}
+              </span>
+            </div>
+
+            {/* Realtime Countdown Timer Clock */}
+            <div className="bg-white/15 backdrop-blur-md rounded-2xl p-4 border border-white/20 space-y-2 relative z-10 text-center">
+              <div className="flex items-center justify-between text-xs text-amber-100 font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <ChefHat className="w-4 h-4 text-amber-300" />
+                  <span>Estimasi Dapur Kedai</span>
+                </span>
+                <span className="font-bold text-white bg-white/20 px-2 py-0.5 rounded-full text-[10px]">
+                  {etaWindowString}
+                </span>
+              </div>
+
+              {/* Digital Countdown Timer Display (MM:SS) */}
+              <div className="pt-1 flex items-center justify-center gap-3">
+                <div className="bg-charcoal/90 text-amber-400 px-4 py-2 rounded-2xl font-mono text-3xl font-black border border-white/20 shadow-inner flex items-center gap-2">
+                  <Clock className="w-6 h-6 text-amber-400 animate-spin-slow" />
+                  <span>{formatTimerDigital(remainingSeconds)}</span>
+                </div>
+              </div>
+
+              {/* Realtime Progress Bar */}
+              <div className="space-y-1 pt-1">
+                <div className="w-full bg-black/20 rounded-full h-2.5 overflow-hidden p-0.5 border border-white/10">
+                  <div 
+                    className="bg-gradient-to-r from-amber-300 to-amber-400 h-full rounded-full transition-all duration-1000 ease-linear shadow-xs"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-amber-100 font-bold px-0.5">
+                  <span>Proses Masak: {progressPercent}%</span>
+                  <span>
+                    {remainingSeconds === 0 ? 'Pesanan Siap!' : `Tersisa ${remainingSeconds} Detik`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Kitchen Live Message Footer */}
+            <div className="text-center pt-1 text-xs font-semibold text-white/90 relative z-10 flex items-center justify-center gap-1.5">
+              <Flame className="w-4 h-4 text-amber-300 animate-bounce" />
+              <span>
+                {currentStatus === 'CONFIRMED' && 'Pesanan diterima POS, koki bersiap memasak...'}
+                {currentStatus === 'KITCHEN_PROCESSING' && 'Dapur sedang menggoreng & menyajikan pesanan...'}
+                {currentStatus === 'READY' && 'Pesanan selesai dimasak! Siap disajikan.'}
+              </span>
+            </div>
+          </div>
+
+          {/* Stepper Tracking Visualizer */}
+          <div className="bg-parchment-soft p-4 rounded-3xl border border-parchment-border space-y-4">
+            <h4 className="font-extrabold text-xs uppercase tracking-wider text-gray-500">
+              Tahapan Proses Dapur
+            </h4>
+
+            <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-parchment-border">
+              {steps.map((step, idx) => {
+                const isDone = 
+                  (step.id === 'CONFIRMED' && (currentStatus === 'CONFIRMED' || currentStatus === 'KITCHEN_PROCESSING' || currentStatus === 'READY')) ||
+                  (step.id === 'KITCHEN_PROCESSING' && (currentStatus === 'KITCHEN_PROCESSING' || currentStatus === 'READY')) ||
+                  (step.id === 'READY' && currentStatus === 'READY');
+
+                const isCurrent = step.id === currentStatus;
+
+                return (
+                  <div key={step.id} className="relative flex items-start justify-between gap-3 text-xs">
+                    
+                    {/* Circle Bullet Node */}
+                    <div 
+                      className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+                        isDone 
+                          ? 'bg-emerald-500 text-white shadow-xs ring-4 ring-emerald-100' 
+                          : isCurrent 
+                          ? 'bg-nyamleng-500 text-white ring-4 ring-nyamleng-100 animate-pulse' 
+                          : 'bg-gray-200 text-gray-500'
+                      }`}
+                    >
+                      {isDone ? <CheckCircle2 className="w-3.5 h-3.5" /> : idx + 1}
+                    </div>
+
+                    <div className="space-y-0.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h5 className={`font-bold text-sm ${isCurrent ? 'text-nyamleng-600' : 'text-charcoal'}`}>
+                          {step.label}
+                        </h5>
+                        {isCurrent && (
+                          <span className="bg-nyamleng-100 text-nyamleng-700 text-[9px] font-extrabold px-2 py-0.5 rounded-full">
+                            Aktif Sekarang
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-gray-500 text-[11px]">{step.desc}</p>
+                    </div>
+
+                    <span className="font-semibold text-[11px] text-gray-500 bg-white px-2 py-1 rounded-lg border border-parchment-border whitespace-nowrap">
+                      {step.time}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Customer & Store Details Card */}
+          <div className="p-4 bg-white rounded-3xl border border-parchment-border space-y-3 text-xs text-charcoal">
+            <h4 className="font-extrabold text-xs uppercase tracking-wider text-gray-500 pb-2 border-b border-parchment-border">
+              Rincian Pemesan & Lokasi Kedai
+            </h4>
+
+            <div className="grid grid-cols-2 gap-3 text-[11px]">
+              <div>
+                <span className="text-gray-400 block font-medium">Nama Pemesan:</span>
+                <span className="font-bold text-charcoal text-xs">{activeOrder.customerName}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block font-medium">WhatsApp Notification:</span>
+                <span className="font-bold text-charcoal text-xs">{activeOrder.customerPhone || OFFICIAL_STORE_WA}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 block font-medium">Metode Bayar:</span>
+                <span className="font-bold text-nyamleng-600 text-xs">
+                  {activeOrder.paymentMethod === 'QRIS' ? 'QRIS Statis (LUNAS)' : 'Kasir POS'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400 block font-medium">Lokasi Kedai:</span>
+                <span className="font-bold text-charcoal text-xs">{STORE_LOCATION}</span>
+              </div>
+            </div>
+
+            {/* Email Dispatch Info */}
+            <div className="pt-2 border-t border-parchment-border flex items-center justify-between text-[11px] text-gray-500">
+              <span className="flex items-center gap-1 font-semibold text-emerald-700">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>E-Receipt dikirim ke {activeOrder.customerEmail}</span>
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-4 bg-white border-t border-parchment-border flex items-center justify-between gap-3">
+          <button
+            onClick={() => toggleOrderStatus(false)}
+            className="w-full py-3 px-4 bg-nyamleng-500 hover:bg-nyamleng-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all active:scale-98"
+          >
+            Tutup Tracking Status
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
