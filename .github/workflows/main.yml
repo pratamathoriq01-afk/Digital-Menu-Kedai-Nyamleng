@@ -1,0 +1,15 @@
+name: Cek Kode POS Kedai
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Tarik Kode dari Repository
+      uses: actions/checkout@v4
+    
+    - name: Info Status
+      run: echo "Kode berhasil masuk ke branch main dan siap dilanjutkan!"
