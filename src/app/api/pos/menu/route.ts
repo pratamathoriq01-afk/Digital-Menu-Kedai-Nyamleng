@@ -1,15 +1,18 @@
 import { NextResponse } from 'next/server';
-import { MOCK_MENU_ITEMS, MOCK_CATEGORIES } from '@/data/mockMenu';
+import { MOCK_CATEGORIES } from '@/data/mockMenu';
+import { fetchSupabaseMenuItems } from '@/services/supabaseMenuService';
 
 export async function GET() {
   try {
+    const supabaseItems = await fetchSupabaseMenuItems();
+
     return NextResponse.json({
       success: true,
       data: {
         categories: MOCK_CATEGORIES,
-        items: MOCK_MENU_ITEMS,
+        items: supabaseItems,
       },
-      message: 'POS menu items retrieved successfully',
+      message: 'POS menu items retrieved successfully from Supabase Master Database',
     });
   } catch (error) {
     return NextResponse.json(

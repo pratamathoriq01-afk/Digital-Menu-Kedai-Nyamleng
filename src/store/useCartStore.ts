@@ -13,6 +13,7 @@ import {
   SelectedVariant,
   Voucher 
 } from '@/types/pos';
+import { createSupabaseTransaction } from '@/services/supabaseOrderService';
 
 export const INITIAL_VOUCHERS: Voucher[] = [
   {
@@ -309,7 +310,12 @@ export const useCartStore = create<CartState>()(
           isOrderStatusOpen: true,
         });
 
-        // Instant Email & WhatsApp Dispatch Call
+        // 1. Sync Transaction to Master Supabase POS Database
+        createSupabaseTransaction(newOrder).catch((err) => {
+          console.error('[Supabase Master POS Sync Error]:', err);
+        });
+
+        // 2. Instant Email & WhatsApp Dispatch Call
         try {
           const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
           const emailRes = await fetch(`${baseUrl}/api/email/send-receipt`, {
