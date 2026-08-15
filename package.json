@@ -9,6 +9,7 @@
     "lint": "echo 'Linting passed'"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.435.0",
     "mcp-remote": "^0.1.38",

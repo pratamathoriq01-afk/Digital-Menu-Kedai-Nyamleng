@@ -1,3 +1,4 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { OFFICIAL_STORE_WA, OrderPayload } from '@/types/pos';
 
 export const generateWhatsAppOrderMessage = (order: OrderPayload): string => {
@@ -128,35 +129,28 @@ export const processAIWhatsAppBotMessageAsync = async (incomingMsg: string, send
 
   if (geminiKey) {
     try {
-      const prompt = `Anda adalah Customer Service AI Assistant resmi dari "Kedai Nyamleng Malang". 
-Jawab pertanyaan pembeli berikut secara ramah, sopan, singkat, dan informatif:
-- Alamat: Kota Malang, Jawa Timur
-- Jam Operasional: Setiap Hari (10:00 - 22:00 WIB)
-- Pembayaran: QRIS Statis All Payment (GoPay, OVO, DANA, ShopeePay, BCA, Mandiri, BRI, BNI, dll)
-- Menu Spesial: Bebek Goreng Sambal Hitam Madura (Rp 38k), Ayam Goreng Kremes (Rp 28k), Rawon Daging Sapi Malang (Rp 32k), Es Teh Manis Jumbo (Rp 6k)
-- Website Menu Digital: https://digital-menu-kedai-nyamleng.vercel.app
+      // 1. Inisialisasi Gemini AI sebagai CS Kedai Nyamleng
+      const genAI = new GoogleGenerativeAI(geminiKey);
 
-Pesan Pembeli: "${incomingMsg}"`;
+      // Model gemini-1.5-pro dengan systemInstruction CS Kedai
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-pro',
+        systemInstruction:
+          'Kamu adalah Customer Service dari "Kedai Nyamleng". Jawab dengan ramah, santai, dan profesional. Fokus membantu masalah pesanan makanan. Kedai berlokasi di Kota Malang, Jawa Timur. Buka 10:00 - 22:00 WIB. Menerima pembayaran QRIS Statis. Website: https://digital-menu-kedai-nyamleng.vercel.app',
+      });
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
-        }
-      );
+      const result = await model.generateContent(incomingMsg);
+      const response = await result.response;
+      const text = response.text();
 
-      const data = await response.json();
-      const aiReply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (aiReply) return aiReply.trim();
+      if (text) {
+        return text.trim();
+      }
     } catch (err) {
-      console.error('[Gemini AI Error]:', err);
+      console.error('[GoogleGenerativeAI Gemini 1.5 Pro Error]:', err);
     }
   }
 
-  // Fallback to rule-based responses
+  // Fallback to rule-based engine
   return processAIWhatsAppBotMessage(incomingMsg, senderPhone);
 };
