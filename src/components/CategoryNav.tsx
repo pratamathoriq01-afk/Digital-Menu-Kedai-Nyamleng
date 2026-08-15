@@ -21,11 +21,11 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 };
 
 export const CategoryNav: React.FC = () => {
-  const { selectedCategory, setSelectedCategory } = useCartStore();
+  const { menuItems, selectedCategory, setSelectedCategory } = useCartStore();
 
   const getCategoryCount = (catId: string) => {
-    if (catId === 'all') return MOCK_MENU_ITEMS.length;
-    return MOCK_MENU_ITEMS.filter((item) => item.categoryId === catId).length;
+    if (catId === 'all') return menuItems.length;
+    return menuItems.filter((item) => item.categoryId === catId).length;
   };
 
   return (

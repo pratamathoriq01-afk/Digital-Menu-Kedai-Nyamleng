@@ -1,0 +1,90 @@
+// Prisma Schema for Kedai Nyamleng POS & Digital Menu Integrasi
+// Connected to Supabase PostgreSQL: db.pqebwoigkmeothadtzjr.supabase.co
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model MenuItem {
+  id               String            @id @default(cuid())
+  name             String
+  category         String
+  price            Int
+  hpp              Int
+  taxPercent       Int               @default(10)
+  icon             String?
+  imageUrl         String?
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  transactionItems TransactionItem[]
+}
+
+model Transaction {
+  id              String            @id @default(cuid())
+  orderNumber     String            @unique
+  customerName    String?
+  customerPhone   String?
+  customerEmail   String?
+  orderType       String            // 'TAKEAWAY', 'DELIVERY', 'DINE_IN'
+  tableNumber     String?
+  subtotal        Int
+  discountType    String?
+  discountValue   Int               @default(0)
+  discountAmount  Int               @default(0)
+  tax             Int               @default(0)
+  total           Int
+  hppTotal        Int               @default(0)
+  netProfit       Int               @default(0)
+  cashReceived    Int               @default(0)
+  change          Int               @default(0)
+  orderStatus     String?           @default("PROCESSED") // 'PROCESSED', 'DELIVERING', 'READY', 'COMPLETED'
+  paymentStatus   String?           @default("PAID")
+  paymentMethod   String?           @default("QRIS")
+  deliveryCourier String?
+  orderNotes      String?
+  createdAt       DateTime          @default(now())
+  items           TransactionItem[]
+}
+
+model TransactionItem {
+  id            String      @id @default(cuid())
+  transactionId String
+  menuItemId    String?
+  nameSnapshot  String
+  priceSnapshot Int
+  hppSnapshot   Int         @default(0)
+  qty           Int
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  menuItem      MenuItem?   @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+}
+
+model MonthlyArchive {
+  id           String   @id @default(cuid())
+  month        Int
+  year         Int
+  totalRevenue Int
+  totalHpp     Int
+  netProfit    Int
+  totalTax     Int
+  createdAt    DateTime @default(now())
+}
+
+model Voucher {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  title         String
+  description   String
+  discountType  String   // 'FIXED', 'PERCENTAGE'
+  discountValue Int
+  maxDiscount   Int?
+  minSubtotal   Int
+  validUntil    String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}

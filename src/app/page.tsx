@@ -24,6 +24,8 @@ import { MenuItem } from '@/types/pos';
 
 export default function Home() {
   const {
+    menuItems,
+    fetchMenuItems,
     cartItems,
     selectedCategory,
     searchQuery,
@@ -41,6 +43,11 @@ export default function Home() {
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItem | null>(null);
   const [isCustomizeOpen, setIsCustomizeOpen] = useState<boolean>(false);
 
+  // Fetch real-time menu items from Supabase Master POS DB on mount
+  React.useEffect(() => {
+    fetchMenuItems();
+  }, [fetchMenuItems]);
+
   const itemCount = getItemCount();
   const subtotal = getSubtotal();
   const tax = getTaxAmount();
@@ -55,7 +62,7 @@ export default function Home() {
   };
 
   // Filter menu items by selected category and search query
-  const filteredMenuItems = MOCK_MENU_ITEMS.filter((item) => {
+  const filteredMenuItems = menuItems.filter((item) => {
     const matchesCategory =
       selectedCategory && selectedCategory !== 'all'
         ? item.categoryId === selectedCategory

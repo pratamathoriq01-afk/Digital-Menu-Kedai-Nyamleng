@@ -13,7 +13,9 @@ import {
   SelectedVariant,
   Voucher 
 } from '@/types/pos';
+import { MOCK_MENU_ITEMS } from '@/data/mockMenu';
 import { createSupabaseTransaction } from '@/services/supabaseOrderService';
+import { fetchSupabaseMenuItems } from '@/services/supabaseMenuService';
 
 export const INITIAL_VOUCHERS: Voucher[] = [
   {
@@ -53,6 +55,8 @@ export const INITIAL_VOUCHERS: Voucher[] = [
 ];
 
 interface CartState {
+  menuItems: MenuItem[];
+  isLoadingMenu: boolean;
   cartItems: CartItem[];
   orderType: OrderType;
   deliveryCourier: DeliveryCourier;
@@ -71,6 +75,9 @@ interface CartState {
   // Voucher State
   appliedVoucher: Voucher | null;
   availableVouchers: Voucher[];
+
+  // Menu Operations
+  fetchMenuItems: () => Promise<void>;
 
   // Setters
   setOrderType: (type: OrderType) => void;
@@ -116,6 +123,8 @@ interface CartState {
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
+      menuItems: MOCK_MENU_ITEMS,
+      isLoadingMenu: false,
       cartItems: [],
       orderType: 'TAKEAWAY',
       deliveryCourier: 'GRAB_SEND',
@@ -133,6 +142,17 @@ export const useCartStore = create<CartState>()(
 
       appliedVoucher: null,
       availableVouchers: INITIAL_VOUCHERS,
+
+      fetchMenuItems: async () => {
+        set({ isLoadingMenu: true });
+        try {
+          const items = await fetchSupabaseMenuItems();
+          set({ menuItems: items, isLoadingMenu: false });
+        } catch (e) {
+          console.error('[fetchMenuItems error]:', e);
+          set({ isLoadingMenu: false });
+        }
+      },
 
       setOrderType: (type) => set({ orderType: type }),
       setDeliveryCourier: (courier) => set({ deliveryCourier: courier }),
