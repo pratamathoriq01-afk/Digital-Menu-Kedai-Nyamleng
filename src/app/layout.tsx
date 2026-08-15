@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Lexend } from 'next/font/google';
 import './globals.css';
+import { cn } from "@/lib/utils";
 
 const inter = Inter({
   subsets: ['latin'],
@@ -40,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id" className={`${inter.variable} ${lexend.variable}`}>
+    <html lang="id" className={cn(inter.variable, lexend.variable)}>
       <body 
         suppressHydrationWarning 
         className={`${inter.className} antialiased selection:bg-nyamleng-500 selection:text-white bg-parchment text-charcoal min-h-screen flex flex-col`}
