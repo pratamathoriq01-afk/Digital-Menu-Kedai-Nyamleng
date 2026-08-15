@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
 import { OFFICIAL_STORE_WA, OrderStatus, STORE_LOCATION } from '@/types/pos';
+import { supabase } from '@/lib/supabaseClient';
 
 export const OrderStatusModal: React.FC = () => {
   const { isOrderStatusOpen, toggleOrderStatus, activeOrder } = useCartStore();
@@ -96,6 +97,41 @@ export const OrderStatusModal: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [isOrderStatusOpen, activeOrder]);
+
+  // Real-time Supabase Database Poller for Status Changes from Kasir App
+  useEffect(() => {
+    if (!isOrderStatusOpen || !activeOrder) return;
+
+    const checkSupabaseStatus = async () => {
+      try {
+        const { data } = await supabase
+          .from('Transaction')
+          .select('orderStatus')
+          .eq('id', activeOrder.orderId)
+          .maybeSingle();
+
+        if (data && data.orderStatus) {
+          const raw = data.orderStatus.toUpperCase();
+          let mappedStatus: OrderStatus = 'CONFIRMED';
+          if (raw === 'ORDER_ACCEPTED' || raw === 'CONFIRMED' || raw === 'PENDING') mappedStatus = 'CONFIRMED';
+          else if (raw === 'IN_PROCESSED' || raw === 'KITCHEN_PROCESSING' || raw === 'PROCESSED') mappedStatus = 'KITCHEN_PROCESSING';
+          else if (raw === 'ORDER_FINISH' || raw === 'READY' || raw === 'COMPLETED') mappedStatus = 'READY';
+
+          if (mappedStatus !== currentStatus) {
+            setCurrentStatus(mappedStatus);
+            setNotificationToast(`[POS Update] Status pesanan #${activeOrder.orderId} diperbarui oleh Kasir: ${mappedStatus}`);
+            sendWhatsAppProgressUpdate(mappedStatus);
+          }
+        }
+      } catch (e) {
+        console.error('Supabase Status Check Error:', e);
+      }
+    };
+
+    checkSupabaseStatus();
+    const dbInterval = setInterval(checkSupabaseStatus, 2000);
+    return () => clearInterval(dbInterval);
+  }, [isOrderStatusOpen, activeOrder, currentStatus]);
 
   // Derive exact real-time seconds remaining and status
   const orderTimeMs = activeOrder ? new Date(activeOrder.createdAt).getTime() : Date.now();

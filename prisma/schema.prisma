@@ -10,6 +10,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Customer {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  phone        String
+  passwordHash String?
+  avatarUrl    String?
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+}
+
 model MenuItem {
   id               String            @id @default(cuid())
   name             String
@@ -28,6 +39,7 @@ model MenuItem {
 model Transaction {
   id              String            @id @default(cuid())
   orderNumber     String            @unique
+  customerUserId  String?
   customerName    String?
   customerPhone   String?
   customerEmail   String?
@@ -43,12 +55,13 @@ model Transaction {
   netProfit       Int               @default(0)
   cashReceived    Int               @default(0)
   change          Int               @default(0)
-  orderStatus     String?           @default("PROCESSED") // 'PROCESSED', 'DELIVERING', 'READY', 'COMPLETED'
+  orderStatus     String?           @default("PROCESSED") // 'PENDING', 'CONFIRMED', 'KITCHEN_PROCESSING', 'READY', 'COMPLETED'
   paymentStatus   String?           @default("PAID")
   paymentMethod   String?           @default("QRIS")
   deliveryCourier String?
   orderNotes      String?
   createdAt       DateTime          @default(now())
+  customer        Customer?         @relation(fields: [customerUserId], references: [id], onDelete: SetNull)
   items           TransactionItem[]
 }
 
