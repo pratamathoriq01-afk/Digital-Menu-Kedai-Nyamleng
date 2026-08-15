@@ -294,19 +294,18 @@ export const useCartStore = create<CartState>((set, get) => ({
       isOrderStatusOpen: true,
     });
 
-    // Robust Auto-Trigger Email Dispatch API Endpoint
+    // Instant Email Dispatch Call
     try {
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      fetch(`${baseUrl}/api/email/send-receipt`, {
+      const emailRes = await fetch(`${baseUrl}/api/email/send-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newOrder),
-      })
-        .then((res) => res.json())
-        .then((data) => console.log('Email Receipt Auto-Dispatch Result:', data))
-        .catch((err) => console.log('Email Auto-Dispatch background notification:', err));
+      });
+      const emailData = await emailRes.json();
+      console.log('Instant Email Dispatch Success:', emailData);
     } catch (e) {
-      console.log('Email trigger Error:', e);
+      console.error('Instant Email Dispatch Error:', e);
     }
 
     return newOrder;
