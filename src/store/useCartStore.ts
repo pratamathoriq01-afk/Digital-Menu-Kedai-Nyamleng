@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { 
   CartItem, 
   DeliveryCourier, 
@@ -111,215 +112,234 @@ interface CartState {
   submitOrder: (paymentMethod?: PaymentMethod) => Promise<OrderPayload>;
 }
 
-export const useCartStore = create<CartState>((set, get) => ({
-  cartItems: [],
-  orderType: 'TAKEAWAY',
-  deliveryCourier: 'GRAB_SEND',
-  customerName: '',
-  customerEmail: '',
-  customerPhone: '',
-  orderNotes: '',
-  isCartOpen: false,
-  isCheckoutOpen: false,
-  isOrderStatusOpen: false,
-  isVoucherModalOpen: false,
-  activeOrder: null,
-  searchQuery: '',
-  selectedCategory: 'all',
-
-  appliedVoucher: null,
-  availableVouchers: INITIAL_VOUCHERS,
-
-  setOrderType: (type) => set({ orderType: type }),
-  setDeliveryCourier: (courier) => set({ deliveryCourier: courier }),
-  setCustomerInfo: (name, email, phone = '') => 
-    set({ customerName: name, customerEmail: email, customerPhone: phone }),
-  setOrderNotes: (notes) => set({ orderNotes: notes }),
-  setSearchQuery: (query) => set({ searchQuery: query }),
-  setSelectedCategory: (catId) => set({ selectedCategory: catId }),
-  toggleCart: (isOpen) => set((state) => ({ isCartOpen: isOpen ?? !state.isCartOpen })),
-  toggleCheckout: (isOpen) => set((state) => ({ isCheckoutOpen: isOpen ?? !state.isCheckoutOpen })),
-  toggleOrderStatus: (isOpen) => set((state) => ({ isOrderStatusOpen: isOpen ?? !state.isOrderStatusOpen })),
-  toggleVoucherModal: (isOpen) => set((state) => ({ isVoucherModalOpen: isOpen ?? !state.isVoucherModalOpen })),
-
-  addToCart: (menuItem, selectedVariants = [], selectedAddOns = [], itemNotes = '', quantity = 1) => {
-    const variantExtra = selectedVariants.reduce((acc, v) => acc + v.priceModifier, 0);
-    const addOnExtra = selectedAddOns.reduce((acc, a) => acc + a.price, 0);
-    const unitPrice = menuItem.price + variantExtra + addOnExtra;
-
-    const cartItemId = `${menuItem.id}-${selectedVariants.map(v => v.optionId).join('_')}-${selectedAddOns.map(a => a.optionId).join('_')}-${itemNotes.trim()}`;
-
-    set((state) => {
-      const existingIndex = state.cartItems.findIndex((ci) => ci.cartItemId === cartItemId);
-      if (existingIndex > -1) {
-        const updated = [...state.cartItems];
-        const currentItem = updated[existingIndex];
-        const newQty = currentItem.quantity + quantity;
-        updated[existingIndex] = {
-          ...currentItem,
-          quantity: newQty,
-          itemSubtotal: newQty * currentItem.unitPrice,
-        };
-        return { cartItems: updated };
-      }
-
-      const newCartItem: CartItem = {
-        cartItemId,
-        menuItem,
-        selectedVariants,
-        selectedAddOns,
-        itemNotes,
-        quantity,
-        unitPrice,
-        itemSubtotal: unitPrice * quantity,
-      };
-
-      return { cartItems: [...state.cartItems, newCartItem] };
-    });
-  },
-
-  updateQuantity: (cartItemId, delta) => {
-    set((state) => {
-      const updated = state.cartItems
-        .map((item) => {
-          if (item.cartItemId === cartItemId) {
-            const newQty = item.quantity + delta;
-            if (newQty <= 0) return null;
-            return {
-              ...item,
-              quantity: newQty,
-              itemSubtotal: newQty * item.unitPrice,
-            };
-          }
-          return item;
-        })
-        .filter((item): item is CartItem => item !== null);
-      return { cartItems: updated };
-    });
-  },
-
-  updateItemNotes: (cartItemId, notes) => {
-    set((state) => ({
-      cartItems: state.cartItems.map((item) =>
-        item.cartItemId === cartItemId ? { ...item, itemNotes: notes } : item
-      ),
-    }));
-  },
-
-  removeFromCart: (cartItemId) => {
-    set((state) => ({
-      cartItems: state.cartItems.filter((i) => i.cartItemId !== cartItemId),
-    }));
-  },
-
-  clearCart: () => set({ cartItems: [], appliedVoucher: null }),
-
-  applyVoucher: (code) => {
-    const state = get();
-    const cleanCode = code.trim().toUpperCase();
-    const voucher = state.availableVouchers.find((v) => v.code === cleanCode && v.isActive);
-
-    if (!voucher) {
-      return { success: false, message: `Voucher promo "${code}" tidak ditemukan atau sudah tidak berlaku.` };
-    }
-
-    const subtotal = state.getSubtotal();
-    if (subtotal < voucher.minSubtotal) {
-      const formatRupiah = (val: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-      return { 
-        success: false, 
-        message: `Minimal belanja makanan untuk voucher ini adalah ${formatRupiah(voucher.minSubtotal)}. Tambahkan menu lagi!` 
-      };
-    }
-
-    set({ appliedVoucher: voucher, isVoucherModalOpen: false });
-    return { success: true, message: `Voucher "${voucher.code}" berhasil dipasang!` };
-  },
-
-  removeVoucher: () => set({ appliedVoucher: null }),
-
-  getSubtotal: () => {
-    return get().cartItems.reduce((acc, item) => acc + item.itemSubtotal, 0);
-  },
-
-  getTaxAmount: () => {
-    const subtotal = get().getSubtotal();
-    return Math.round(subtotal * 0.1); // PB1 10%
-  },
-
-  getServiceFee: () => 0,
-
-  getDiscountAmount: () => {
-    const state = get();
-    if (!state.appliedVoucher) return 0;
-
-    const subtotal = state.getSubtotal();
-    const v = state.appliedVoucher;
-
-    if (v.discountType === 'FIXED') {
-      return Math.min(v.discountValue, subtotal);
-    } else {
-      const calculated = Math.round((subtotal * v.discountValue) / 100);
-      return v.maxDiscount ? Math.min(calculated, v.maxDiscount) : calculated;
-    }
-  },
-
-  getTotalAmount: () => {
-    const subtotal = get().getSubtotal();
-    const tax = get().getTaxAmount();
-    const discount = get().getDiscountAmount();
-    return Math.max(subtotal + tax - discount, 0);
-  },
-
-  getItemCount: () => {
-    return get().cartItems.reduce((acc, item) => acc + item.quantity, 0);
-  },
-
-  submitOrder: async () => {
-    const state = get();
-    const orderId = `KDN-${Date.now().toString().slice(-6)}`;
-    const newOrder: OrderPayload = {
-      orderId,
-      customerName: state.customerName || 'Pelanggan Kedai',
-      customerEmail: state.customerEmail || OFFICIAL_STORE_EMAIL,
-      customerPhone: state.customerPhone || OFFICIAL_STORE_WA,
-      orderType: state.orderType,
-      deliveryCourier: state.orderType === 'DELIVERY' ? state.deliveryCourier : undefined,
-      items: state.cartItems,
-      subtotal: state.getSubtotal(),
-      taxAmount: state.getTaxAmount(),
-      serviceFee: 0,
-      discountAmount: state.getDiscountAmount(),
-      appliedVoucherCode: state.appliedVoucher?.code,
-      totalAmount: state.getTotalAmount(),
-      paymentMethod: 'QRIS',
-      paymentStatus: 'PAID',
-      orderStatus: 'PENDING',
-      createdAt: new Date().toISOString(),
-      posSyncStatus: 'SYNCED',
-    };
-
-    set({
-      activeOrder: newOrder,
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
       cartItems: [],
+      orderType: 'TAKEAWAY',
+      deliveryCourier: 'GRAB_SEND',
+      customerName: '',
+      customerEmail: '',
+      customerPhone: '',
+      orderNotes: '',
+      isCartOpen: false,
       isCheckoutOpen: false,
-      isOrderStatusOpen: true,
-    });
+      isOrderStatusOpen: false,
+      isVoucherModalOpen: false,
+      activeOrder: null,
+      searchQuery: '',
+      selectedCategory: 'all',
 
-    // Instant Email Dispatch Call
-    try {
-      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      const emailRes = await fetch(`${baseUrl}/api/email/send-receipt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newOrder),
-      });
-      const emailData = await emailRes.json();
-      console.log('Instant Email Dispatch Success:', emailData);
-    } catch (e) {
-      console.error('Instant Email Dispatch Error:', e);
+      appliedVoucher: null,
+      availableVouchers: INITIAL_VOUCHERS,
+
+      setOrderType: (type) => set({ orderType: type }),
+      setDeliveryCourier: (courier) => set({ deliveryCourier: courier }),
+      setCustomerInfo: (name, email, phone = '') => 
+        set({ customerName: name, customerEmail: email, customerPhone: phone }),
+      setOrderNotes: (notes) => set({ orderNotes: notes }),
+      setSearchQuery: (query) => set({ searchQuery: query }),
+      setSelectedCategory: (catId) => set({ selectedCategory: catId }),
+      toggleCart: (isOpen) => set((state) => ({ isCartOpen: isOpen ?? !state.isCartOpen })),
+      toggleCheckout: (isOpen) => set((state) => ({ isCheckoutOpen: isOpen ?? !state.isCheckoutOpen })),
+      toggleOrderStatus: (isOpen) => set((state) => ({ isOrderStatusOpen: isOpen ?? !state.isOrderStatusOpen })),
+      toggleVoucherModal: (isOpen) => set((state) => ({ isVoucherModalOpen: isOpen ?? !state.isVoucherModalOpen })),
+
+      addToCart: (menuItem, selectedVariants = [], selectedAddOns = [], itemNotes = '', quantity = 1) => {
+        const variantExtra = selectedVariants.reduce((acc, v) => acc + v.priceModifier, 0);
+        const addOnExtra = selectedAddOns.reduce((acc, a) => acc + a.price, 0);
+        const unitPrice = menuItem.price + variantExtra + addOnExtra;
+
+        const cartItemId = `${menuItem.id}-${selectedVariants.map(v => v.optionId).join('_')}-${selectedAddOns.map(a => a.optionId).join('_')}-${itemNotes.trim()}`;
+
+        set((state) => {
+          const existingIndex = state.cartItems.findIndex((ci) => ci.cartItemId === cartItemId);
+          if (existingIndex > -1) {
+            const updated = [...state.cartItems];
+            const currentItem = updated[existingIndex];
+            const newQty = currentItem.quantity + quantity;
+            updated[existingIndex] = {
+              ...currentItem,
+              quantity: newQty,
+              itemSubtotal: newQty * currentItem.unitPrice,
+            };
+            return { cartItems: updated };
+          }
+
+          const newCartItem: CartItem = {
+            cartItemId,
+            menuItem,
+            selectedVariants,
+            selectedAddOns,
+            itemNotes,
+            quantity,
+            unitPrice,
+            itemSubtotal: unitPrice * quantity,
+          };
+
+          return { cartItems: [...state.cartItems, newCartItem] };
+        });
+      },
+
+      updateQuantity: (cartItemId, delta) => {
+        set((state) => {
+          const updated = state.cartItems
+            .map((item) => {
+              if (item.cartItemId === cartItemId) {
+                const newQty = item.quantity + delta;
+                if (newQty <= 0) return null;
+                return {
+                  ...item,
+                  quantity: newQty,
+                  itemSubtotal: newQty * item.unitPrice,
+                };
+              }
+              return item;
+            })
+            .filter((item): item is CartItem => item !== null);
+          return { cartItems: updated };
+        });
+      },
+
+      updateItemNotes: (cartItemId, notes) => {
+        set((state) => ({
+          cartItems: state.cartItems.map((item) =>
+            item.cartItemId === cartItemId ? { ...item, itemNotes: notes } : item
+          ),
+        }));
+      },
+
+      removeFromCart: (cartItemId) => {
+        set((state) => ({
+          cartItems: state.cartItems.filter((i) => i.cartItemId !== cartItemId),
+        }));
+      },
+
+      clearCart: () => set({ cartItems: [], appliedVoucher: null, orderNotes: '' }),
+
+      applyVoucher: (code) => {
+        const state = get();
+        const cleanCode = code.trim().toUpperCase();
+        const voucher = state.availableVouchers.find((v) => v.code === cleanCode && v.isActive);
+
+        if (!voucher) {
+          return { success: false, message: `Voucher promo "${code}" tidak ditemukan atau sudah tidak berlaku.` };
+        }
+
+        const subtotal = state.getSubtotal();
+        if (subtotal < voucher.minSubtotal) {
+          const formatRupiah = (val: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
+          return { 
+            success: false, 
+            message: `Minimal belanja makanan untuk voucher ini adalah ${formatRupiah(voucher.minSubtotal)}. Tambahkan menu lagi!` 
+          };
+        }
+
+        set({ appliedVoucher: voucher, isVoucherModalOpen: false });
+        return { success: true, message: `Voucher "${voucher.code}" berhasil dipasang!` };
+      },
+
+      removeVoucher: () => set({ appliedVoucher: null }),
+
+      getSubtotal: () => {
+        return get().cartItems.reduce((acc, item) => acc + item.itemSubtotal, 0);
+      },
+
+      getTaxAmount: () => {
+        const subtotal = get().getSubtotal();
+        return Math.round(subtotal * 0.1); // PB1 10%
+      },
+
+      getServiceFee: () => 0,
+
+      getDiscountAmount: () => {
+        const state = get();
+        if (!state.appliedVoucher) return 0;
+
+        const subtotal = state.getSubtotal();
+        const v = state.appliedVoucher;
+
+        if (v.discountType === 'FIXED') {
+          return Math.min(v.discountValue, subtotal);
+        } else {
+          const calculated = Math.round((subtotal * v.discountValue) / 100);
+          return v.maxDiscount ? Math.min(calculated, v.maxDiscount) : calculated;
+        }
+      },
+
+      getTotalAmount: () => {
+        const subtotal = get().getSubtotal();
+        const tax = get().getTaxAmount();
+        const discount = get().getDiscountAmount();
+        return Math.max(subtotal + tax - discount, 0);
+      },
+
+      getItemCount: () => {
+        return get().cartItems.reduce((acc, item) => acc + item.quantity, 0);
+      },
+
+      submitOrder: async () => {
+        const state = get();
+        const orderId = `KDN-${Date.now().toString().slice(-6)}`;
+        const newOrder: OrderPayload = {
+          orderId,
+          customerName: state.customerName || 'Pelanggan Kedai',
+          customerEmail: state.customerEmail || OFFICIAL_STORE_EMAIL,
+          customerPhone: state.customerPhone || OFFICIAL_STORE_WA,
+          orderType: state.orderType,
+          deliveryCourier: state.orderType === 'DELIVERY' ? state.deliveryCourier : undefined,
+          items: state.cartItems,
+          subtotal: state.getSubtotal(),
+          taxAmount: state.getTaxAmount(),
+          serviceFee: 0,
+          discountAmount: state.getDiscountAmount(),
+          appliedVoucherCode: state.appliedVoucher?.code,
+          totalAmount: state.getTotalAmount(),
+          paymentMethod: 'QRIS',
+          paymentStatus: 'PAID',
+          orderStatus: 'PENDING',
+          createdAt: new Date().toISOString(),
+          posSyncStatus: 'SYNCED',
+        };
+
+        set({
+          activeOrder: newOrder,
+          cartItems: [],
+          isCheckoutOpen: false,
+          isOrderStatusOpen: true,
+        });
+
+        // Instant Email & WhatsApp Dispatch Call
+        try {
+          const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+          const emailRes = await fetch(`${baseUrl}/api/email/send-receipt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newOrder),
+          });
+          const emailData = await emailRes.json();
+          console.log('Instant Email & WhatsApp Dispatch Success:', emailData);
+        } catch (e) {
+          console.error('Instant Dispatch Error:', e);
+        }
+
+        return newOrder;
+      },
+    }),
+    {
+      name: 'kedai-nyamleng-cart-storage',
+      storage: createJSONStorage(() => (typeof window !== 'undefined' ? window.localStorage : (null as any))),
+      partialize: (state) => ({
+        cartItems: state.cartItems,
+        orderType: state.orderType,
+        deliveryCourier: state.deliveryCourier,
+        customerName: state.customerName,
+        customerEmail: state.customerEmail,
+        customerPhone: state.customerPhone,
+        orderNotes: state.orderNotes,
+        appliedVoucher: state.appliedVoucher,
+        activeOrder: state.activeOrder,
+      }),
     }
-
-    return newOrder;
-  },
-}));
+  )
+);

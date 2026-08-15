@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { processAIWhatsAppBotMessageAsync } from '@/services/whatsappService';
+import { processAIWhatsAppBotMessageAsync, sendMetaWhatsAppMessage } from '@/services/whatsappService';
 
 // Fungsi GET ini dipakai Meta HANYA untuk ngetes kecocokan Token saat pertama kali disambungkan
 export async function GET(request: NextRequest) {
@@ -37,23 +37,31 @@ export async function POST(request: NextRequest) {
       const fromNumber = message.from;
       const text = message.text?.body || '';
 
+      // 1. Hasilkan Jawaban dari Gemini 1.5 Pro AI Admin
       const botReply = await processAIWhatsAppBotMessageAsync(text, fromNumber);
-      console.log(`[WhatsApp Gemini AI Bot] Reply to ${fromNumber}: ${botReply}`);
+      console.log(`[WhatsApp Gemini AI Bot] Generated Reply for ${fromNumber}: ${botReply}`);
+
+      // 2. KIRIMKAN BALASAN AI OTOMATIS KE WHATSAPP PEMBELI VIA META CLOUD API
+      const dispatchResult = await sendMetaWhatsAppMessage(fromNumber, botReply);
+      console.log(`[WhatsApp Meta Cloud API Dispatch] Result:`, dispatchResult);
 
       return NextResponse.json({
         success: true,
         recipient: fromNumber,
         replyMessage: botReply,
+        dispatchResult,
       });
     }
 
     // Direct JSON message simulation support
     if (body.message && body.from) {
       const botReply = await processAIWhatsAppBotMessageAsync(body.message, body.from);
+      const dispatchResult = await sendMetaWhatsAppMessage(body.from, botReply);
       return NextResponse.json({
         success: true,
         recipient: body.from,
         replyMessage: botReply,
+        dispatchResult,
       });
     }
 

@@ -12,11 +12,11 @@ import {
   Check,
   ChefHat,
   Flame,
-  Clock
+  Clock,
+  MessageSquare
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
-import { OFFICIAL_STORE_EMAIL, OFFICIAL_STORE_WA, OrderStatus, STORE_LOCATION } from '@/types/pos';
-import { getWhatsAppDirectLink } from '@/services/whatsappService';
+import { OFFICIAL_STORE_WA, OrderStatus, STORE_LOCATION } from '@/types/pos';
 
 export const OrderStatusModal: React.FC = () => {
   const { isOrderStatusOpen, toggleOrderStatus, activeOrder } = useCartStore();
@@ -32,6 +32,30 @@ export const OrderStatusModal: React.FC = () => {
 
   // Realtime Timestamp Tracker (Seconds elapsed since order creation)
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
+
+  // Helper to send real-time progress updates to customer's WhatsApp
+  const sendWhatsAppProgressUpdate = async (status: OrderStatus) => {
+    if (!activeOrder || !activeOrder.customerPhone) return;
+
+    try {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      await fetch(`${baseUrl}/api/whatsapp/notify-progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: activeOrder.orderId,
+          customerName: activeOrder.customerName,
+          customerPhone: activeOrder.customerPhone,
+          status,
+          orderType: activeOrder.orderType,
+          deliveryCourier: activeOrder.deliveryCourier,
+        }),
+      });
+      console.log(`[WA Progress Notify Sent]: Status ${status} for Order #${activeOrder.orderId}`);
+    } catch (e) {
+      console.error('[WA Progress Notify Error]:', e);
+    }
+  };
 
   // Calculate logical prep time in minutes based on ordered items
   const prepTimeMinutes = useMemo(() => {
@@ -78,7 +102,7 @@ export const OrderStatusModal: React.FC = () => {
   const elapsedSeconds = Math.max(Math.floor((nowTimestamp - orderTimeMs) / 1000), 0);
   const remainingSeconds = Math.max(totalTargetSeconds - elapsedSeconds, 0);
 
-  // Sync current status with real-time seconds
+  // Sync current status with real-time seconds & dispatch WA notifications
   useEffect(() => {
     if (!activeOrder) return;
 
@@ -86,16 +110,19 @@ export const OrderStatusModal: React.FC = () => {
       if (currentStatus !== 'CONFIRMED') {
         setCurrentStatus('CONFIRMED');
         setNotificationToast(`[POS Kedai] Pesanan #${activeOrder.orderId} diterima oleh Kasir!`);
+        sendWhatsAppProgressUpdate('CONFIRMED');
       }
     } else if (remainingSeconds > 0) {
       if (currentStatus !== 'KITCHEN_PROCESSING') {
         setCurrentStatus('KITCHEN_PROCESSING');
         setNotificationToast(`[Dapur Kedai] Koki sedang memasak pesanan Anda (Estimasi ${prepTimeMinutes} Menit)...`);
+        sendWhatsAppProgressUpdate('KITCHEN_PROCESSING');
       }
     } else {
       if (currentStatus !== 'READY') {
         setCurrentStatus('READY');
         setNotificationToast(`[Kedai Nyamleng] Pesanan #${activeOrder.orderId} Selesai & Siap!`);
+        sendWhatsAppProgressUpdate('READY');
       }
     }
   }, [elapsedSeconds, remainingSeconds, activeOrder, prepTimeMinutes, currentStatus]);
@@ -194,6 +221,22 @@ export const OrderStatusModal: React.FC = () => {
             </div>
           )}
 
+          {/* WhatsApp Automated AI Assistant Active Banner */}
+          <div className="p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200/80 flex items-center gap-3 shadow-xs">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0 shadow-sm">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <div className="text-xs">
+              <p className="font-extrabold text-emerald-900 flex items-center gap-1.5">
+                <span>WhatsApp AI Assistant Bintang 5 Aktif</span>
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+              </p>
+              <p className="text-emerald-700 text-[11px] mt-0.5 leading-snug">
+                Notifikasi otomatis & struk telah dikirim ke WhatsApp <span className="font-bold">({activeOrder.customerPhone || OFFICIAL_STORE_WA})</span>. Anda dapat langsung membalas chat WA untuk bertanya ke AI Admin Kedai!
+              </p>
+            </div>
+          </div>
+
           {/* Live Order Hero Status Card */}
           <div className="bg-gradient-to-br from-nyamleng-500 to-nyamleng-600 text-white rounded-3xl p-5 shadow-lg relative overflow-hidden space-y-4">
             
@@ -282,7 +325,7 @@ export const OrderStatusModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Stepper Tracking Visualizer (Cleaned Badges) */}
+          {/* Stepper Tracking Visualizer */}
           <div className="bg-parchment-soft p-4 rounded-3xl border border-parchment-border space-y-4">
             <h4 className="font-extrabold text-xs uppercase tracking-wider text-gray-500">
               Tahapan Proses Dapur
@@ -370,23 +413,13 @@ export const OrderStatusModal: React.FC = () => {
 
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 bg-white border-t border-parchment-border flex flex-col sm:flex-row items-center justify-between gap-2.5">
-          <a
-            href={getWhatsAppDirectLink(activeOrder)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
-            <span>Konfirmasi WA Official (085113661387)</span>
-          </a>
-
+        {/* Clean Footer Action */}
+        <div className="p-4 bg-white border-t border-parchment-border flex items-center justify-end">
           <button
             onClick={() => toggleOrderStatus(false)}
-            className="w-full sm:w-auto py-3 px-4 bg-charcoal hover:bg-gray-800 text-white font-bold text-xs rounded-2xl transition-all cursor-pointer flex-shrink-0"
+            className="w-full py-3.5 px-6 bg-nyamleng-600 hover:bg-nyamleng-700 active:scale-98 text-white font-extrabold text-sm rounded-2xl shadow-md transition-all cursor-pointer"
           >
-            Tutup Tracking
+            Tutup Tracking & Kembali ke Menu
           </button>
         </div>
       </div>
