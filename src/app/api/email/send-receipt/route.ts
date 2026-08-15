@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendOrderReceiptEmail } from '@/services/emailService';
+import { generateWhatsAppOrderMessage, sendMetaWhatsAppMessage } from '@/services/whatsappService';
 import { OrderPayload } from '@/types/pos';
 
 export async function POST(request: NextRequest) {
@@ -13,17 +14,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 1. Dispatch Email Receipt
     const result = await sendOrderReceiptEmail(orderPayload);
+
+    // 2. Dispatch Meta WhatsApp Confirmation Message (if phone number is present)
+    let waResult = null;
+    if (orderPayload.customerPhone) {
+      const waMsg = generateWhatsAppOrderMessage(orderPayload);
+      waResult = await sendMetaWhatsAppMessage(orderPayload.customerPhone, waMsg);
+    }
 
     return NextResponse.json({
       success: true,
-      message: `E-Receipt for order #${orderPayload.orderId} successfully dispatched to ${orderPayload.customerEmail}`,
-      details: result,
+      message: `E-Receipt & WhatsApp Notification for order #${orderPayload.orderId} processed`,
+      emailDetails: result,
+      whatsappDetails: waResult,
     });
   } catch (error: any) {
-    console.error('Email Dispatch Error:', error);
+    console.error('Order Notification Dispatch Error:', error);
     return NextResponse.json(
-      { success: false, message: 'Failed to dispatch email receipt', error: error?.message },
+      { success: false, message: 'Failed to dispatch order notification', error: error?.message },
       { status: 500 }
     );
   }
