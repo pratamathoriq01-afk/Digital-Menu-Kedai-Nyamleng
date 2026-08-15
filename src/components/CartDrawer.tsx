@@ -39,12 +39,14 @@ export const CartDrawer: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs animate-fade-in">
+    <div 
+      className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs animate-fade-in flex justify-end"
+      onClick={() => toggleCart(false)}
+    >
       <div 
-        className="absolute inset-y-0 right-0 max-w-full flex pl-10"
+        className="w-full sm:w-[420px] max-w-full bg-white flex flex-col shadow-2xl h-full max-h-[100dvh] pb-[env(safe-area-inset-bottom)] animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="w-screen max-w-md bg-white flex flex-col shadow-2xl animate-slide-up h-full max-h-[100dvh] pb-[env(safe-area-inset-bottom)]">
           {/* Header */}
           <div className="p-4 sm:p-5 bg-charcoal text-white flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-2">
@@ -210,6 +212,5 @@ export const CartDrawer: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
