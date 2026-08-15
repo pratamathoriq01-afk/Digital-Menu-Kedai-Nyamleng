@@ -40,6 +40,40 @@ export const getWhatsAppDirectLink = (order: OrderPayload): string => {
   return `https://wa.me/${cleanNumber}?text=${encodedText}`;
 };
 
+export const sendMetaWhatsAppMessage = async (toPhoneNumber: string, messageText: string) => {
+  const token = (process.env.WA_ACCESS_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+  const phoneNumberId = (process.env.WA_PHONE_NUMBER_ID || '').trim().replace(/^["']|["']$/g, '');
+
+  if (!token || !phoneNumberId) {
+    console.log('[Meta WhatsApp API] Skipping API dispatch (Missing WA_ACCESS_TOKEN or WA_PHONE_NUMBER_ID).');
+    return { success: false, reason: 'Missing WA_ACCESS_TOKEN or WA_PHONE_NUMBER_ID' };
+  }
+
+  try {
+    const cleanTo = toPhoneNumber.replace(/[^0-9]/g, '').replace(/^0/, '62');
+    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: cleanTo,
+        type: 'text',
+        text: { body: messageText },
+      }),
+    });
+
+    const data = await response.json();
+    console.log('[Meta WhatsApp API Result]:', data);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('[Meta WhatsApp API Error]:', err);
+    return { success: false, error: err?.message };
+  }
+};
+
 export const processAIWhatsAppBotMessage = (incomingMsg: string, senderPhone: string): string => {
   const lower = incomingMsg.toLowerCase();
 
@@ -57,16 +91,16 @@ export const processAIWhatsAppBotMessage = (incomingMsg: string, senderPhone: st
 
   if (lower.includes('buka') || lower.includes('jam') || lower.includes('alamat') || lower.includes('lokasi')) {
     return (
-      ` Kedai Nyamleng Malang:\n` +
-      ` Alamat: Kota Malang, Jawa Timur\n` +
-      ` Jam Operasional: Setiap Hari (10:00 - 22:00 WIB)\n` +
-      ` Layanan: Takeaway & Delivery (GrabSend, GoSend, InDrive, Shopee SPX)`
+      `Kedai Nyamleng Malang:\n` +
+      `Alamat: Kota Malang, Jawa Timur\n` +
+      `Jam Operasional: Setiap Hari (10:00 - 22:00 WIB)\n` +
+      `Layanan: Takeaway & Delivery (GrabSend, GoSend, InDrive, Shopee SPX)`
     );
   }
 
   if (lower.includes('bayar') || lower.includes('qris') || lower.includes('rekening')) {
     return (
-      ` Kedai Nyamleng menerima pembayaran full via QRIS Statis All Payment.\n` +
+      `Kedai Nyamleng menerima pembayaran full via QRIS Statis All Payment.\n` +
       `Dapat di-scan via GoPay, OVO, DANA, ShopeePay, BCA, Mandiri, BRI, BNI, dan semua M-Banking!`
     );
   }
