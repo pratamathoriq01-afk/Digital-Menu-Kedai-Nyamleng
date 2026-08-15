@@ -2,7 +2,7 @@ export type OrderType = 'TAKEAWAY' | 'DELIVERY';
 
 export type DeliveryCourier = 'GRAB_SEND' | 'GO_SEND' | 'INDRIVE' | 'SHOPEE_SPX';
 
-export type PaymentMethod = 'QRIS' | 'GOPAY' | 'SHOPEEPAY' | 'CASHIER_POS';
+export type PaymentMethod = 'QRIS';
 
 export type OrderStatus = 
   | 'PENDING' 

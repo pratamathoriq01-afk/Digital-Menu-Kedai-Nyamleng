@@ -105,7 +105,7 @@ interface CartState {
   getItemCount: () => number;
 
   // Order Submission & Auto-Email Dispatch
-  submitOrder: (paymentMethod: PaymentMethod) => Promise<OrderPayload>;
+  submitOrder: (paymentMethod?: PaymentMethod) => Promise<OrderPayload>;
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
@@ -263,7 +263,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     return get().cartItems.reduce((acc, item) => acc + item.quantity, 0);
   },
 
-  submitOrder: async (paymentMethod) => {
+  submitOrder: async () => {
     const state = get();
     const orderId = `KDN-${Date.now().toString().slice(-6)}`;
     const newOrder: OrderPayload = {
@@ -280,8 +280,8 @@ export const useCartStore = create<CartState>((set, get) => ({
       discountAmount: state.getDiscountAmount(),
       appliedVoucherCode: state.appliedVoucher?.code,
       totalAmount: state.getTotalAmount(),
-      paymentMethod,
-      paymentStatus: paymentMethod === 'CASHIER_POS' ? 'UNPAID' : 'PAID',
+      paymentMethod: 'QRIS',
+      paymentStatus: 'PAID',
       orderStatus: 'PENDING',
       createdAt: new Date().toISOString(),
       posSyncStatus: 'SYNCED',
@@ -294,13 +294,17 @@ export const useCartStore = create<CartState>((set, get) => ({
       isOrderStatusOpen: true,
     });
 
-    // Auto-trigger Email Dispatch API Endpoint
+    // Robust Auto-Trigger Email Dispatch API Endpoint
     try {
-      fetch('/api/email/send-receipt', {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      fetch(`${baseUrl}/api/email/send-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newOrder),
-      }).catch((err) => console.log('Email Auto-Dispatch background notification:', err));
+      })
+        .then((res) => res.json())
+        .then((data) => console.log('Email Receipt Auto-Dispatch Result:', data))
+        .catch((err) => console.log('Email Auto-Dispatch background notification:', err));
     } catch (e) {
       console.log('Email trigger Error:', e);
     }

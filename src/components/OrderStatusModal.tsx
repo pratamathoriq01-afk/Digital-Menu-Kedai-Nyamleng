@@ -12,7 +12,6 @@ import {
   Check,
   ChefHat,
   Flame,
-  Sparkles,
   Clock
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
@@ -110,14 +109,6 @@ export const OrderStatusModal: React.FC = () => {
 
   if (!isMounted || !isOrderStatusOpen || !activeOrder) return null;
 
-  const formatRupiah = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
   const handleCopyOrderId = () => {
     navigator.clipboard.writeText(activeOrder.orderId);
     setIsCopied(true);
@@ -142,19 +133,16 @@ export const OrderStatusModal: React.FC = () => {
       id: 'CONFIRMED',
       label: 'Diterima POS',
       desc: 'Kasir mengonfirmasi pesanan',
-      time: 'Tercatat di POS',
     },
     {
       id: 'KITCHEN_PROCESSING',
       label: 'Dapur Memproses',
       desc: 'Koki sedang memasak pesanan Anda',
-      time: remainingSeconds > 0 ? `Tersisa ${formatTimerDigital(remainingSeconds)}` : 'Selesai dimasak',
     },
     {
       id: 'READY',
       label: activeOrder.orderType === 'DELIVERY' ? 'Siap Dikirim' : 'Siap Ambil',
       desc: activeOrder.orderType === 'DELIVERY' ? 'Kurir mengambil pesanan' : 'Silakan ambil di konter kasir',
-      time: remainingSeconds === 0 ? 'Siap Disajikan!' : 'Menunggu dapur',
     },
   ];
 
@@ -293,13 +281,13 @@ export const OrderStatusModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Stepper Tracking Visualizer */}
+          {/* Stepper Tracking Visualizer (Cleaned Badges) */}
           <div className="bg-parchment-soft p-4 rounded-3xl border border-parchment-border space-y-4">
             <h4 className="font-extrabold text-xs uppercase tracking-wider text-gray-500">
               Tahapan Proses Dapur
             </h4>
 
-            <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-parchment-border">
+            <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-parchment-border">
               {steps.map((step, idx) => {
                 const isDone = 
                   (step.id === 'CONFIRMED' && (currentStatus === 'CONFIRMED' || currentStatus === 'KITCHEN_PROCESSING' || currentStatus === 'READY')) ||
@@ -309,7 +297,7 @@ export const OrderStatusModal: React.FC = () => {
                 const isCurrent = step.id === currentStatus;
 
                 return (
-                  <div key={step.id} className="relative flex items-start justify-between gap-3 text-xs">
+                  <div key={step.id} className="relative flex items-start gap-3 text-xs">
                     
                     {/* Circle Bullet Node */}
                     <div 
@@ -337,10 +325,6 @@ export const OrderStatusModal: React.FC = () => {
                       </div>
                       <p className="text-gray-500 text-[11px]">{step.desc}</p>
                     </div>
-
-                    <span className="font-semibold text-[11px] text-gray-500 bg-white px-2 py-1 rounded-lg border border-parchment-border whitespace-nowrap">
-                      {step.time}
-                    </span>
                   </div>
                 );
               })}
@@ -365,7 +349,7 @@ export const OrderStatusModal: React.FC = () => {
               <div>
                 <span className="text-gray-400 block font-medium">Metode Bayar:</span>
                 <span className="font-bold text-nyamleng-600 text-xs">
-                  {activeOrder.paymentMethod === 'QRIS' ? 'QRIS Statis (LUNAS)' : 'Kasir POS'}
+                  QRIS Statis (LUNAS)
                 </span>
               </div>
               <div>

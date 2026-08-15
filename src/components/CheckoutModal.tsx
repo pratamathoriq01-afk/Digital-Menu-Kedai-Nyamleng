@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { 
   X, 
   QrCode, 
-  Store, 
   ArrowRight, 
   ShieldCheck, 
   User, 
@@ -17,7 +16,7 @@ import {
   Tag 
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
-import { DeliveryCourier, PaymentMethod } from '@/types/pos';
+import { DeliveryCourier } from '@/types/pos';
 import { PromoVoucherModal } from './PromoVoucherModal';
 
 export const CheckoutModal: React.FC = () => {
@@ -42,7 +41,6 @@ export const CheckoutModal: React.FC = () => {
     submitOrder,
   } = useCartStore();
 
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('QRIS');
   const [nameInput, setNameInput] = useState(customerName || '');
   const [emailInput, setEmailInput] = useState(customerEmail || '');
   const [phoneInput, setPhoneInput] = useState(customerPhone || '');
@@ -82,7 +80,7 @@ export const CheckoutModal: React.FC = () => {
     setCustomerInfo(nameInput, emailInput, phoneInput);
     
     setTimeout(async () => {
-      await submitOrder(paymentMethod);
+      await submitOrder();
       setIsSubmitting(false);
     }, 800);
   };
@@ -229,81 +227,45 @@ export const CheckoutModal: React.FC = () => {
               </div>
             )}
 
-            {/* Payment Method Selector */}
+            {/* Payment Method Selector (100% Full QRIS Statis) */}
             <div className="space-y-3">
               <h3 className="font-bold text-xs uppercase tracking-wider text-gray-500">
-                Metode Pembayaran (QRIS Statis & Kasir)
+                Metode Pembayaran (QRIS Statis All Payment)
               </h3>
 
-              <div className="grid grid-cols-1 gap-2">
-                {/* QRIS Statis */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('QRIS')}
-                  className={`flex items-center justify-between p-3.5 rounded-2xl border text-xs font-semibold transition-all ${
-                    paymentMethod === 'QRIS'
-                      ? 'border-nyamleng-500 bg-nyamleng-50 text-nyamleng-600 shadow-xs ring-1 ring-nyamleng-500'
-                      : 'border-parchment-border hover:bg-parchment-soft text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-nyamleng-500 text-white rounded-xl">
-                      <QrCode className="w-5 h-5" />
-                    </div>
-                    <div className="text-left">
-                      <span className="font-bold block text-sm">QRIS Statis All Payment</span>
-                      <span className="text-[11px] text-gray-500 font-normal">
-                        Scan via GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, BRI, BNI
-                      </span>
-                    </div>
+              <div className="p-3.5 rounded-2xl border border-nyamleng-500 bg-nyamleng-50 text-nyamleng-600 shadow-xs ring-1 ring-nyamleng-500 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-nyamleng-500 text-white rounded-xl">
+                    <QrCode className="w-5 h-5" />
                   </div>
-                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md">
-                    Rekomendasi
-                  </span>
-                </button>
-
-                {/* Bayar di Kasir POS */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('CASHIER_POS')}
-                  className={`flex items-center justify-between p-3.5 rounded-2xl border text-xs font-semibold transition-all ${
-                    paymentMethod === 'CASHIER_POS'
-                      ? 'border-nyamleng-500 bg-nyamleng-50 text-nyamleng-600 shadow-xs ring-1 ring-nyamleng-500'
-                      : 'border-parchment-border hover:bg-parchment-soft text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-charcoal text-white rounded-xl">
-                      <Store className="w-5 h-5" />
-                    </div>
-                    <div className="text-left">
-                      <span className="font-bold block text-sm">Bayar di Kasir POS</span>
-                      <span className="text-[11px] text-gray-500 font-normal">
-                        Tunai / Kartu EDC saat pesanan disajikan
-                      </span>
-                    </div>
+                  <div className="text-left">
+                    <span className="font-bold block text-sm">QRIS Statis All Payment</span>
+                    <span className="text-[11px] text-gray-500 font-normal">
+                      Scan via GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, BRI, BNI
+                    </span>
                   </div>
-                </button>
+                </div>
+                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md">
+                  Aktif
+                </span>
               </div>
             </div>
 
             {/* QRIS Statis Graphic Preview */}
-            {paymentMethod === 'QRIS' && (
-              <div className="p-4 bg-nyamleng-50 rounded-2xl border border-nyamleng-200 text-center space-y-2">
-                <div className="inline-block p-2 bg-white rounded-2xl shadow-xs border border-parchment-border">
-                  <img
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=KEDAI_NYAMLENG_MALANG_QRIS_STATIS"
-                    alt="QRIS Statis Kedai Nyamleng"
-                    className="w-36 h-36 mx-auto"
-                  />
-                </div>
-                <p className="text-[11px] font-bold text-nyamleng-700">
-                  QRIS Statis Kedai Nyamleng • Dapat di-scan oleh semua aplikasi M-Banking & E-Wallet
-                </p>
+            <div className="p-4 bg-nyamleng-50 rounded-2xl border border-nyamleng-200 text-center space-y-2">
+              <div className="inline-block p-2 bg-white rounded-2xl shadow-xs border border-parchment-border">
+                <img
+                  src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=KEDAI_NYAMLENG_MALANG_QRIS_STATIS"
+                  alt="QRIS Statis Kedai Nyamleng"
+                  className="w-36 h-36 mx-auto"
+                />
               </div>
-            )}
+              <p className="text-[11px] font-bold text-nyamleng-700">
+                QRIS Statis Kedai Nyamleng • Dapat di-scan oleh semua aplikasi M-Banking & E-Wallet
+              </p>
+            </div>
 
-            {/* Promos or Vouchers Trigger Bar matching Reference Gambar 1 */}
+            {/* Promos or Vouchers Trigger Bar */}
             <div className="space-y-1">
               {!appliedVoucher ? (
                 <button
@@ -379,7 +341,7 @@ export const CheckoutModal: React.FC = () => {
                 <span>Menghubungkan ke POS Kasir Kedai...</span>
               ) : (
                 <>
-                  <span>Konfirmasi & Bayar ({formatRupiah(total)})</span>
+                  <span>Konfirmasi & Bayar QRIS ({formatRupiah(total)})</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
