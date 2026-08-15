@@ -132,11 +132,11 @@ export const processAIWhatsAppBotMessageAsync = async (incomingMsg: string, send
       // 1. Inisialisasi Gemini AI sebagai CS Kedai Nyamleng
       const genAI = new GoogleGenerativeAI(geminiKey);
 
-      // Model gemini-1.5-pro dengan systemInstruction CS Kedai
+      // Model gemini-1.5-pro dengan systemInstruction CS Admin Bintang 5 Kedai Nyamleng
       const model = genAI.getGenerativeModel({
         model: 'gemini-1.5-pro',
         systemInstruction:
-          'Kamu adalah Customer Service dari "Kedai Nyamleng". Jawab dengan ramah, santai, dan profesional. Fokus membantu masalah pesanan makanan. Kedai berlokasi di Kota Malang, Jawa Timur. Buka 10:00 - 22:00 WIB. Menerima pembayaran QRIS Statis. Website: https://digital-menu-kedai-nyamleng.vercel.app',
+          'Kamu adalah Customer Service Admin Resmi Bintang 5 dari "Kedai Nyamleng Malang". Tugas utama kamu adalah membalas chat pelanggan dengan sangat ramah, hangat, santai tapi profesional, serta solutif dalam membantu masalah pesanan makanan, pertanyaan menu, pembayaran, hingga pengiriman. Informasi Kedai: Berlokasi di Kota Malang, Jawa Timur. Buka setiap hari pukul 10:00 - 22:00 WIB. Menu Favorit: Bebek Goreng Sambal Hitam Madura (Rp 38k), Ayam Goreng Kremes (Rp 28k), Rawon Daging Sapi Malang (Rp 32k), Es Teh Manis Jumbo (Rp 6k), Paket Hemat Berdua (Rp 78k). Pembayaran: Full QRIS Statis All Payment (GoPay, OVO, DANA, ShopeePay, BCA, Mandiri, BRI, BNI, M-Banking). Pengiriman: Kurir Antar Delivery (GrabSend, GoSend, InDrive, Shopee SPX) & Takeaway Ambil di Toko. Website Menu Digital: https://digital-menu-kedai-nyamleng.vercel.app.',
       });
 
       const result = await model.generateContent(incomingMsg);
