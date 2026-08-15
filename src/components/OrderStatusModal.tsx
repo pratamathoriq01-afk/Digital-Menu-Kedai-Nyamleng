@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
 import { OFFICIAL_STORE_EMAIL, OFFICIAL_STORE_WA, OrderStatus, STORE_LOCATION } from '@/types/pos';
+import { getWhatsAppDirectLink } from '@/services/whatsappService';
 
 export const OrderStatusModal: React.FC = () => {
   const { isOrderStatusOpen, toggleOrderStatus, activeOrder } = useCartStore();
@@ -370,12 +371,22 @@ export const OrderStatusModal: React.FC = () => {
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 bg-white border-t border-parchment-border flex items-center justify-between gap-3">
+        <div className="p-4 bg-white border-t border-parchment-border flex flex-col sm:flex-row items-center justify-between gap-2.5">
+          <a
+            href={getWhatsAppDirectLink(activeOrder)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+            <span>Konfirmasi WA Official (085113661387)</span>
+          </a>
+
           <button
             onClick={() => toggleOrderStatus(false)}
-            className="w-full py-3 px-4 bg-nyamleng-500 hover:bg-nyamleng-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all active:scale-98"
+            className="w-full sm:w-auto py-3 px-4 bg-charcoal hover:bg-gray-800 text-white font-bold text-xs rounded-2xl transition-all cursor-pointer flex-shrink-0"
           >
-            Tutup Tracking Status
+            Tutup Tracking
           </button>
         </div>
       </div>
