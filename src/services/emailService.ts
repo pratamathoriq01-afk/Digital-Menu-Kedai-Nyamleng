@@ -141,11 +141,17 @@ export const sendOrderReceiptEmail = async (order: OrderPayload) => {
   const htmlContent = generateEmailHTML(order);
   const subject = `Receipt #${order.orderId} - Kedai Nyamleng`;
 
-  // Opsi 1: Resend (Jika API Key ada)
-  if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('your_resend_api_key')) {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+  // Clean API key string (remove quotes, whitespace, newlines)
+  const apiKey = (process.env.RESEND_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+
+  console.log('[EmailService] API Key check, length:', apiKey.length, 'prefix:', apiKey.slice(0, 7));
+
+  // Opsi 1: Resend API (Jika API Key ada & valid)
+  if (apiKey && apiKey.startsWith('re_')) {
+    const resend = new Resend(apiKey);
     try {
-      // Direct dispatch to customer email
+      console.log('[EmailService] Attempting Resend dispatch to:', order.customerEmail);
+      
       const response = await resend.emails.send({
         from: `Kedai Nyamleng <onboarding@resend.dev>`,
         to: [order.customerEmail],
@@ -153,8 +159,10 @@ export const sendOrderReceiptEmail = async (order: OrderPayload) => {
         html: htmlContent,
       });
 
+      console.log('[EmailService] Resend Primary Response:', JSON.stringify(response));
+
       if (response.error) {
-        console.warn('Resend primary dispatch notice (onboarding limitation):', response.error);
+        console.warn('[EmailService] Resend Primary Notice:', response.error);
         // Fallback to sending to official store email if customer email is unverified during Resend onboarding
         const fallbackResponse = await resend.emails.send({
           from: `Kedai Nyamleng <onboarding@resend.dev>`,
@@ -162,12 +170,14 @@ export const sendOrderReceiptEmail = async (order: OrderPayload) => {
           subject: `[Receipt #${order.orderId}] ${subject}`,
           html: htmlContent,
         });
-        return { provider: 'Resend (Official Store Email)', response: fallbackResponse, note: 'Sent to official store email due to Resend onboarding rules.' };
+        console.log('[EmailService] Resend Fallback Response:', JSON.stringify(fallbackResponse));
+        return { provider: 'Resend (Official Store Email Fallback)', response: fallbackResponse, primaryNotice: response.error };
       }
 
       return { provider: 'Resend', response };
-    } catch (err) {
-      console.error('Resend Exception:', err);
+    } catch (err: any) {
+      console.error('[EmailService] Resend Exception:', err?.message || err);
+      return { provider: 'Resend (Exception)', error: err?.message || String(err) };
     }
   }
 
