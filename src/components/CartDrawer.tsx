@@ -44,7 +44,7 @@ export const CartDrawer: React.FC = () => {
         className="absolute inset-y-0 right-0 max-w-full flex pl-10"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="w-screen max-w-md bg-white flex flex-col shadow-2xl animate-slide-up">
+        <div className="w-screen max-w-md bg-white flex flex-col shadow-2xl animate-slide-up h-full max-h-[100dvh] pb-[env(safe-area-inset-bottom)]">
           {/* Header */}
           <div className="p-4 sm:p-5 bg-charcoal text-white flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-2">

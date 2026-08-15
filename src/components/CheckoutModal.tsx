@@ -13,7 +13,8 @@ import {
   Ticket, 
   ChevronRight, 
   CheckCircle2, 
-  Tag 
+  Tag,
+  Download 
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
 import { DeliveryCourier } from '@/types/pos';
@@ -59,6 +60,24 @@ export const CheckoutModal: React.FC = () => {
       currency: 'IDR',
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const handleDownloadQRIS = async () => {
+    try {
+      const qrisUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=KEDAI_NYAMLENG_MALANG_QRIS_STATIS';
+      const response = await fetch(qrisUrl);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'Kedai_Nyamleng_QRIS_Statis.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      alert('Gagal mengunduh gambar QRIS. Silakan screenshot layar HP Anda.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -251,18 +270,29 @@ export const CheckoutModal: React.FC = () => {
               </div>
             </div>
 
-            {/* QRIS Statis Graphic Preview */}
-            <div className="p-4 bg-nyamleng-50 rounded-2xl border border-nyamleng-200 text-center space-y-2">
+            {/* QRIS Statis Graphic Preview + Download Button */}
+            <div className="p-4 bg-nyamleng-50 rounded-2xl border border-nyamleng-200 text-center space-y-2.5">
               <div className="inline-block p-2 bg-white rounded-2xl shadow-xs border border-parchment-border">
                 <img
-                  src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=KEDAI_NYAMLENG_MALANG_QRIS_STATIS"
+                  src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=KEDAI_NYAMLENG_MALANG_QRIS_STATIS"
                   alt="QRIS Statis Kedai Nyamleng"
                   className="w-36 h-36 mx-auto"
                 />
               </div>
               <p className="text-[11px] font-bold text-nyamleng-700">
-                QRIS Statis Kedai Nyamleng • Dapat di-scan oleh semua aplikasi M-Banking & E-Wallet
+                QRIS Statis Kedai Nyamleng • Dapat di-scan via M-Banking & E-Wallet
               </p>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={handleDownloadQRIS}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-nyamleng-500 hover:bg-nyamleng-600 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh Gambar QRIS (PNG)</span>
+                </button>
+              </div>
             </div>
 
             {/* Promos or Vouchers Trigger Bar */}

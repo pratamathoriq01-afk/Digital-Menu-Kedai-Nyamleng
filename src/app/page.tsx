@@ -259,7 +259,7 @@ export default function Home() {
 
       {/* Floating Bottom Cart Bar for Mobile */}
       {itemCount > 0 && (
-        <div className="lg:hidden fixed bottom-4 left-4 right-4 z-40 animate-slide-up">
+        <div className="lg:hidden fixed bottom-4 left-4 right-4 z-40 animate-slide-up pb-[env(safe-area-inset-bottom)]">
           <div className="bg-charcoal text-white rounded-2xl p-3.5 shadow-2xl border border-white/10 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="relative p-2.5 bg-nyamleng-500 text-white rounded-xl">
