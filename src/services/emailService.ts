@@ -70,6 +70,11 @@ export const generateEmailHTML = (order: OrderPayload): string => {
             <div style="font-size: 11px; color: #555; margin-top: 4px;">Tanggal: ${formattedDate}</div>
             <div style="font-size: 11px; color: #555; margin-top: 2px;">Pelanggan: <strong>${order.customerName}</strong> (${order.customerPhone || '-'})</div>
             <div style="font-size: 11px; color: #555; margin-top: 2px;">Tipe Order: <strong>${order.orderType === 'TAKEAWAY' ? 'Takeaway (Ambil di Toko)' : 'Delivery (Kurir Antar)'}</strong></div>
+            ${
+              order.orderNotes
+                ? `<div style="font-size: 11px; color: #b45309; margin-top: 6px; padding: 6px 10px; background-color: #fff8e1; border: 1px solid #ffe082; border-radius: 8px;"><strong>Catatan Tambahan:</strong> ${order.orderNotes}</div>`
+                : ''
+            }
           </div>
 
           <!-- Item Table -->

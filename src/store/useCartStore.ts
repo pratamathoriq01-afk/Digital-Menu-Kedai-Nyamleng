@@ -57,6 +57,7 @@ interface CartState {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  orderNotes: string;
   isCartOpen: boolean;
   isCheckoutOpen: boolean;
   isOrderStatusOpen: boolean;
@@ -73,6 +74,7 @@ interface CartState {
   setOrderType: (type: OrderType) => void;
   setDeliveryCourier: (courier: DeliveryCourier) => void;
   setCustomerInfo: (name: string, email: string, phone?: string) => void;
+  setOrderNotes: (notes: string) => void;
   setSearchQuery: (query: string) => void;
   setSelectedCategory: (catId: string) => void;
   toggleCart: (isOpen?: boolean) => void;
@@ -89,6 +91,7 @@ interface CartState {
     quantity?: number
   ) => void;
   updateQuantity: (cartItemId: string, delta: number) => void;
+  updateItemNotes: (cartItemId: string, notes: string) => void;
   removeFromCart: (cartItemId: string) => void;
   clearCart: () => void;
 
@@ -115,6 +118,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   customerName: '',
   customerEmail: '',
   customerPhone: '',
+  orderNotes: '',
   isCartOpen: false,
   isCheckoutOpen: false,
   isOrderStatusOpen: false,
@@ -130,6 +134,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   setDeliveryCourier: (courier) => set({ deliveryCourier: courier }),
   setCustomerInfo: (name, email, phone = '') => 
     set({ customerName: name, customerEmail: email, customerPhone: phone }),
+  setOrderNotes: (notes) => set({ orderNotes: notes }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedCategory: (catId) => set({ selectedCategory: catId }),
   toggleCart: (isOpen) => set((state) => ({ isCartOpen: isOpen ?? !state.isCartOpen })),
@@ -189,9 +194,16 @@ export const useCartStore = create<CartState>((set, get) => ({
           return item;
         })
         .filter((item): item is CartItem => item !== null);
-
       return { cartItems: updated };
     });
+  },
+
+  updateItemNotes: (cartItemId, notes) => {
+    set((state) => ({
+      cartItems: state.cartItems.map((item) =>
+        item.cartItemId === cartItemId ? { ...item, itemNotes: notes } : item
+      ),
+    }));
   },
 
   removeFromCart: (cartItemId) => {

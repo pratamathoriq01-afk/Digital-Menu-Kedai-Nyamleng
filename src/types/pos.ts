@@ -111,6 +111,7 @@ export interface OrderPayload {
   customerPhone?: string;
   orderType: OrderType;
   deliveryCourier?: DeliveryCourier;
+  orderNotes?: string;
   items: CartItem[];
   subtotal: number;
   taxAmount: number; // PB1 10%
