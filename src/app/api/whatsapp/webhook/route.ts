@@ -1,29 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processAIWhatsAppBotMessage } from '@/services/whatsappService';
 
-// GET Handler: Webhook Verification for Meta WhatsApp Cloud API
+// Fungsi GET ini dipakai Meta HANYA untuk ngetes kecocokan Token saat pertama kali disambungkan
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  const expectedToken = (process.env.WA_VERIFY_TOKEN || 'nyamleng_rahasia_123').trim().replace(/^["']|["']$/g, '');
+  // Tarik token dari file .env (dengan sanitasi string)
+  const VERIFY_TOKEN = (process.env.WA_VERIFY_TOKEN || 'nyamleng_rahasia_123').trim().replace(/^["']|["']$/g, '');
 
-  console.log('[WhatsApp Webhook GET] Mode:', mode, 'Token:', token, 'Expected:', expectedToken);
-
-  if (mode === 'subscribe' && token === expectedToken) {
-    console.log('[WhatsApp Webhook] Verification successful!');
+  // Cek apakah mode-nya subscribe dan tokennya cocok
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+    console.log('Webhook berhasil disambungkan!');
     return new NextResponse(challenge, { status: 200 });
+  } else {
+    return new NextResponse('Akses Ditolak', { status: 403 });
   }
-
-  return NextResponse.json(
-    { success: false, message: 'Forbidden: Invalid verification token' },
-    { status: 403 }
-  );
 }
 
-// POST Handler: Process incoming WhatsApp messages & respond with AI Bot
+// POST Handler: Menerima pesan masuk Meta WhatsApp Cloud API & membalas dengan AI Bot
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
