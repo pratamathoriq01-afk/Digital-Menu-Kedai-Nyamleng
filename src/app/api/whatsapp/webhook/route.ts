@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { processAIWhatsAppBotMessage } from '@/services/whatsappService';
+import { processAIWhatsAppBotMessageAsync } from '@/services/whatsappService';
 
 // Fungsi GET ini dipakai Meta HANYA untuk ngetes kecocokan Token saat pertama kali disambungkan
 export async function GET(request: NextRequest) {
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST Handler: Menerima pesan masuk Meta WhatsApp Cloud API & membalas dengan AI Bot
+// POST Handler: Menerima pesan masuk Meta WhatsApp Cloud API & membalas dengan Gemini AI Bot
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -37,8 +37,8 @@ export async function POST(request: NextRequest) {
       const fromNumber = message.from;
       const text = message.text?.body || '';
 
-      const botReply = processAIWhatsAppBotMessage(text, fromNumber);
-      console.log(`[WhatsApp AI Bot] Reply to ${fromNumber}: ${botReply}`);
+      const botReply = await processAIWhatsAppBotMessageAsync(text, fromNumber);
+      console.log(`[WhatsApp Gemini AI Bot] Reply to ${fromNumber}: ${botReply}`);
 
       return NextResponse.json({
         success: true,
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     // Direct JSON message simulation support
     if (body.message && body.from) {
-      const botReply = processAIWhatsAppBotMessage(body.message, body.from);
+      const botReply = await processAIWhatsAppBotMessageAsync(body.message, body.from);
       return NextResponse.json({
         success: true,
         recipient: body.from,

@@ -122,3 +122,41 @@ export const processAIWhatsAppBotMessage = (incomingMsg: string, senderPhone: st
     `Atau pesan langsung melalui website: https://digital-menu-kedai-nyamleng.vercel.app`
   );
 };
+
+export const processAIWhatsAppBotMessageAsync = async (incomingMsg: string, senderPhone: string): Promise<string> => {
+  const geminiKey = (process.env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+
+  if (geminiKey) {
+    try {
+      const prompt = `Anda adalah Customer Service AI Assistant resmi dari "Kedai Nyamleng Malang". 
+Jawab pertanyaan pembeli berikut secara ramah, sopan, singkat, dan informatif:
+- Alamat: Kota Malang, Jawa Timur
+- Jam Operasional: Setiap Hari (10:00 - 22:00 WIB)
+- Pembayaran: QRIS Statis All Payment (GoPay, OVO, DANA, ShopeePay, BCA, Mandiri, BRI, BNI, dll)
+- Menu Spesial: Bebek Goreng Sambal Hitam Madura (Rp 38k), Ayam Goreng Kremes (Rp 28k), Rawon Daging Sapi Malang (Rp 32k), Es Teh Manis Jumbo (Rp 6k)
+- Website Menu Digital: https://digital-menu-kedai-nyamleng.vercel.app
+
+Pesan Pembeli: "${incomingMsg}"`;
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+          }),
+        }
+      );
+
+      const data = await response.json();
+      const aiReply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (aiReply) return aiReply.trim();
+    } catch (err) {
+      console.error('[Gemini AI Error]:', err);
+    }
+  }
+
+  // Fallback to rule-based responses
+  return processAIWhatsAppBotMessage(incomingMsg, senderPhone);
+};
