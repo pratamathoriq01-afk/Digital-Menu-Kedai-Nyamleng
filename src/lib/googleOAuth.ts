@@ -1,4 +1,5 @@
 import { OAuth2Client, Credentials } from 'google-auth-library';
+import { google } from 'googleapis';
 import crypto from 'crypto';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '899274496131-nvvt5soqunfe5v1a08t5p9r3fha4g1qq.apps.googleusercontent.com';
@@ -26,6 +27,27 @@ export const defaultScopes = [
   'https://www.googleapis.com/auth/userinfo.email',
   'openid'
 ];
+
+/**
+ * Call Google UserInfo API on behalf of the authorized user account
+ */
+export const fetchGoogleUserProfile = async (client?: OAuth2Client) => {
+  const oauth2 = google.oauth2({ version: 'v2', auth: client || oauth2Client });
+  const response = await oauth2.userinfo.get();
+  return response.data;
+};
+
+/**
+ * Example of calling Google Drive API to list filenames in user's Drive using authorized oauth2Client
+ */
+export const fetchGoogleDriveFiles = async (client?: OAuth2Client, pageSize: number = 10) => {
+  const drive = google.drive({ version: 'v3', auth: client || oauth2Client });
+  const response = await drive.files.list({
+    pageSize,
+    fields: 'nextPageToken, files(id, name)',
+  });
+  return response.data.files || [];
+};
 
 /**
  * Check if a specific scope has been granted in tokens.scope
