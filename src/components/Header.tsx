@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, ShoppingBag, Bike, Clock, MapPin, Sparkles, Star, ShieldCheck, Menu, User, LogOut, CheckCircle2, Lock } from 'lucide-react';
+import { Search, ShoppingBag, Bike, Clock, MapPin, Sparkles, Star, ShieldCheck, Menu, User, LogOut, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
 import { OrderType, STORE_LOCATION } from '@/types/pos';
 import { Logo } from './Logo';
@@ -29,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const [timeString, setTimeString] = useState<string>('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isConfirmLogoutOpen, setIsConfirmLogoutOpen] = useState(false);
 
   useEffect(() => {
     const updateClock = () => {
@@ -51,15 +52,16 @@ export const Header: React.FC<HeaderProps> = ({
 
     updateClock();
     const interval = setInterval(updateClock, 1000);
-    return () => setInterval(updateClock, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleOrderTypeChange = (type: OrderType) => {
     setOrderType(type);
   };
 
-  const handleLogout = () => {
+  const handleConfirmLogoutExecution = () => {
     setStoredCustomerUser(null);
+    setIsConfirmLogoutOpen(false);
     setIsProfileModalOpen(false);
     if (onLogoutSuccess) onLogoutSuccess();
   };
@@ -81,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">Riwayat Pesanan</span>
             </button>
 
-            {/* Connected Google / Apple Account Pill Button (Identical to Screenshot) */}
+            {/* Connected Google / Apple Account Pill Button */}
             {currentUser ? (
               <button
                 type="button"
@@ -124,7 +126,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Sleek Hero Logo Section */}
+      {/* Hero Logo Section */}
       <div className="relative overflow-hidden bg-gradient-to-b from-parchment-soft via-white to-parchment py-5 sm:py-6 px-4 border-b border-parchment-border">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-nyamleng-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute inset-0 bg-[radial-gradient(#e64a19_0.5px,transparent_0.5px)] [background-size:16px_16px] opacity-15 pointer-events-none" />
@@ -203,13 +205,13 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Connected Account User Profile & Logout Modal */}
+      {/* Connected Account User Profile Modal */}
       {isProfileModalOpen && currentUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
           <div className="bg-[#161618] text-white w-full max-w-sm rounded-3xl p-6 border border-white/10 shadow-2xl space-y-5 animate-slide-up relative">
             <button
               onClick={() => setIsProfileModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-full text-xs"
+              className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-full text-xs cursor-pointer"
             >
               ✕
             </button>
@@ -234,15 +236,54 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Terhubung dengan Akun {currentUser.provider === 'APPLE' ? 'Apple ID' : 'Google'} Verified</span>
             </div>
 
-            {/* Explicit Red Logout Button */}
+            {/* Logout Trigger Button */}
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={() => setIsConfirmLogoutOpen(true)}
               className="w-full py-3.5 px-4 bg-red-600 hover:bg-red-700 active:scale-98 text-white font-black text-xs rounded-2xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
               <span>Keluar / Logout Akun</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* High-Security Logout Confirmation Dialog Modal */}
+      {isConfirmLogoutOpen && currentUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-[#1c1c1f] text-white w-full max-w-sm rounded-3xl p-6 border border-red-500/30 shadow-2xl space-y-4 animate-slide-up text-center relative">
+            <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center mx-auto border border-red-500/30">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="font-black text-lg text-white">Konfirmasi Keluar Akun</h3>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Apakah Anda yakin ingin keluar dari akun <strong className="text-amber-400">{currentUser.name}</strong>?
+              </p>
+              <p className="text-[11px] text-emerald-400 font-semibold bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-500/20 text-left mt-2">
+                🔒 <strong>Data Anda Aman:</strong> Seluruh profil dan riwayat transaksi Anda TETAP TERSIMPAN PERMANEN di database Supabase Kedai Nyamleng.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsConfirmLogoutOpen(false)}
+                className="flex-1 py-3 px-4 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-2xl transition-all cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmLogoutExecution}
+                className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-2xl shadow-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Ya, Keluar Akun</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
