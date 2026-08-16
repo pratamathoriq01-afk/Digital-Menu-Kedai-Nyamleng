@@ -91,15 +91,21 @@ export const sendMetaWhatsAppMessage = async (toPhoneNumber: string, messageText
       },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
+        recipient_type: 'individual',
         to: cleanTo,
         type: 'text',
-        text: { body: messageText },
+        text: { body: messageText, preview_url: false },
       }),
     });
 
     const data = await response.json();
     console.log('[Meta WhatsApp API Result]:', JSON.stringify(data));
-    return { success: true, data };
+
+    if (data?.messages?.[0]?.id) {
+      return { success: true, messageId: data.messages[0].id, data };
+    }
+
+    return { success: false, data };
   } catch (err: any) {
     console.error('[Meta WhatsApp API Error]:', err);
     return { success: false, error: err?.message };
