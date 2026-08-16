@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const error = searchParams.get('error');
     const state = searchParams.get('state');
 
-    // 1. Handle Error Response e.g. error=access_denied
+    // 1. Handle Error Response from Google consent (e.g. error=access_denied)
     if (error) {
       console.warn('[Google OAuth Callback Error Detected]:', error);
       const diagnostic = parseGoogleOAuthError(error);
@@ -33,8 +33,21 @@ export async function GET(req: NextRequest) {
 
     // 4. Exchange code for access & refresh tokens (access_type=offline)
     console.log('[Google OAuth Callback] Exchanging code for tokens:', code);
-    const tokens = await getGoogleTokensFromCode(code);
-    console.log('[Google OAuth Callback] Tokens exchange successful. Access Token:', !!tokens.access_token);
+    
+    let tokens;
+    try {
+      tokens = await getGoogleTokensFromCode(code);
+      console.log('[Google OAuth Callback] Tokens exchange successful. Access Token:', !!tokens.access_token);
+    } catch (exchangeErr: any) {
+      const googleErrCode = exchangeErr?.response?.data?.error || exchangeErr?.message || 'invalid_grant';
+      console.error('[Google OAuth Token Exchange Error]:', googleErrCode);
+
+      const diagnostic = parseGoogleOAuthError(googleErrCode.includes('invalid_grant') ? 'invalid_grant' : googleErrCode);
+      console.error('[Token Exchange Error Diagnostic]:', diagnostic);
+
+      // Redirect user back to restart OAuth consent flow cleanly
+      return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(diagnostic.code)}`, req.url));
+    }
 
     // 5. Fetch Google User Profile info (name, email, picture) using googleapis userinfo
     try {
