@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, 
   ShoppingBasket, 
@@ -18,8 +18,10 @@ import { ItemCustomizeModal } from '@/components/ItemCustomizeModal';
 import { CartDrawer } from '@/components/CartDrawer';
 import { CheckoutModal } from '@/components/CheckoutModal';
 import { OrderStatusModal } from '@/components/OrderStatusModal';
+import { GoogleLoginModal } from '@/components/GoogleLoginModal';
+import { OrderHistoryDrawer } from '@/components/OrderHistoryDrawer';
 import { useCartStore } from '@/store/useCartStore';
-import { MOCK_MENU_ITEMS } from '@/data/mockMenu';
+import { CustomerUser, getStoredCustomerUser, setStoredCustomerUser } from '@/services/authService';
 import { MenuItem } from '@/types/pos';
 
 export default function Home() {
@@ -43,10 +45,33 @@ export default function Home() {
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItem | null>(null);
   const [isCustomizeOpen, setIsCustomizeOpen] = useState<boolean>(false);
 
-  // Fetch real-time menu items from Supabase Master POS DB on mount
-  React.useEffect(() => {
+  // Customer Authentication & Drawer State
+  const [currentUser, setCurrentUser] = useState<CustomerUser | null>(null);
+  const [isGoogleLoginOpen, setIsGoogleLoginOpen] = useState<boolean>(false);
+  const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState<boolean>(false);
+
+  useEffect(() => {
     fetchMenuItems();
+    const stored = getStoredCustomerUser();
+    if (stored) {
+      setCurrentUser(stored);
+      setIsGoogleLoginOpen(false);
+    } else {
+      setIsGoogleLoginOpen(true);
+    }
   }, [fetchMenuItems]);
+
+  const handleLoginSuccess = (user: CustomerUser) => {
+    setCurrentUser(user);
+    setIsGoogleLoginOpen(false);
+  };
+
+  const handleLogout = () => {
+    setStoredCustomerUser(null);
+    setCurrentUser(null);
+    setIsSidebarDrawerOpen(false);
+    setIsGoogleLoginOpen(true);
+  };
 
   const itemCount = getItemCount();
   const subtotal = getSubtotal();
@@ -83,8 +108,11 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-parchment text-charcoal font-sans flex flex-col pb-24 md:pb-12">
-      {/* Sticky Top Header */}
-      <Header />
+      {/* Sticky Top Header with Burger Bar & Customer Badge */}
+      <Header 
+        onOpenSidebarDrawer={() => setIsSidebarDrawerOpen(true)}
+        currentUser={currentUser}
+      />
 
       {/* Main Container */}
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-6 py-4 sm:py-6 space-y-6">
@@ -148,7 +176,7 @@ export default function Home() {
                 {cartItems.length > 0 && (
                   <button
                     onClick={clearCart}
-                    className="text-xs text-red-500 hover:text-red-600 font-semibold transition-colors"
+                    className="text-xs text-red-500 hover:text-red-600 font-semibold transition-colors cursor-pointer"
                   >
                     Kosongkan
                   </button>
@@ -198,7 +226,7 @@ export default function Home() {
 
                           <button
                             onClick={() => removeFromCart(item.cartItemId)}
-                            className="text-gray-400 hover:text-red-500 p-0.5"
+                            className="text-gray-400 hover:text-red-500 p-0.5 cursor-pointer"
                             title="Hapus Item"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -209,7 +237,7 @@ export default function Home() {
                           <div className="flex items-center border border-parchment-border rounded-lg bg-white p-0.5">
                             <button
                               onClick={() => updateQuantity(item.cartItemId, -1)}
-                              className="w-5 h-5 flex items-center justify-center text-charcoal hover:bg-gray-100 rounded"
+                              className="w-5 h-5 flex items-center justify-center text-charcoal hover:bg-gray-100 rounded cursor-pointer"
                             >
                               <Minus className="w-3 h-3" />
                             </button>
@@ -218,7 +246,7 @@ export default function Home() {
                             </span>
                             <button
                               onClick={() => updateQuantity(item.cartItemId, 1)}
-                              className="w-5 h-5 flex items-center justify-center text-charcoal hover:bg-gray-100 rounded"
+                              className="w-5 h-5 flex items-center justify-center text-charcoal hover:bg-gray-100 rounded cursor-pointer"
                             >
                               <Plus className="w-3 h-3" />
                             </button>
@@ -232,7 +260,7 @@ export default function Home() {
                     ))}
                   </div>
 
-                  {/* Desktop Pricing Breakdown (Cleaned SC) */}
+                  {/* Desktop Pricing Breakdown */}
                   <div className="pt-3 border-t border-parchment-border space-y-1.5 text-xs text-gray-600">
                     <div className="flex justify-between">
                       <span>Subtotal</span>
@@ -251,7 +279,7 @@ export default function Home() {
                   {/* Desktop Proceed to Checkout Button */}
                   <button
                     onClick={() => toggleCheckout(true)}
-                    className="w-full py-3 px-4 bg-nyamleng-500 hover:bg-nyamleng-600 active:scale-98 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-all"
+                    className="w-full py-3 px-4 bg-nyamleng-500 hover:bg-nyamleng-600 active:scale-98 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
                   >
                     <span>Lanjut ke Pembayaran</span>
                     <ArrowRight className="w-4 h-4" />
@@ -283,7 +311,7 @@ export default function Home() {
 
             <button
               onClick={() => toggleCart(true)}
-              className="py-2.5 px-4 bg-nyamleng-500 hover:bg-nyamleng-600 text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+              className="py-2.5 px-4 bg-nyamleng-500 hover:bg-nyamleng-600 text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
             >
               <span>Cek Keranjang</span>
               <ArrowRight className="w-4 h-4" />
@@ -291,6 +319,20 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Mandatory Google Login Modal */}
+      <GoogleLoginModal
+        isOpen={isGoogleLoginOpen}
+        onLoginSuccess={handleLoginSuccess}
+      />
+
+      {/* Burger Bar Sidebar Drawer: Order History & Profile */}
+      <OrderHistoryDrawer
+        isOpen={isSidebarDrawerOpen}
+        onClose={() => setIsSidebarDrawerOpen(false)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
 
       {/* Item Customization Bottom Sheet / Modal */}
       <ItemCustomizeModal

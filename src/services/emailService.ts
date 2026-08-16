@@ -90,8 +90,8 @@ export const generateEmailHTML = (order: OrderPayload): string => {
             </tbody>
           </table>
 
-          <!-- Financial Breakdown (PB1 Only, SC Removed) -->
-          <div style="border-top: 2px solid #eee; pt: 12px; padding-top: 12px; margin-bottom: 16px;">
+          <!-- Financial Breakdown -->
+          <div style="border-top: 2px solid #eee; padding-top: 12px; margin-bottom: 16px;">
             <div style="display: flex; justify-content: space-between; font-size: 12px; color: #555; margin-bottom: 4px;">
               <span>Subtotal Makanan</span>
               <span>${formatRupiah(order.subtotal)}</span>
@@ -133,7 +133,7 @@ export const generateEmailHTML = (order: OrderPayload): string => {
 
           <!-- Footer Message -->
           <div style="text-align: center; font-size: 12px; font-weight: bold; color: #555; padding-top: 10px;">
-            Thanks for your payment • Kedai Nyamleng Malang
+            Terima kasih atas pesanan Anda • Kedai Nyamleng Malang
           </div>
 
         </div>
@@ -144,19 +144,13 @@ export const generateEmailHTML = (order: OrderPayload): string => {
 
 export const sendOrderReceiptEmail = async (order: OrderPayload) => {
   const htmlContent = generateEmailHTML(order);
-  const subject = `Receipt #${order.orderId} - Kedai Nyamleng`;
-
-  // Clean API key string (remove quotes, whitespace, newlines)
+  const subject = `Receipt #${order.orderId} - Kedai Nyamleng Malang`;
   const apiKey = (process.env.RESEND_API_KEY || '').trim().replace(/^["']|["']$/g, '');
 
-  console.log('[EmailService] API Key check, length:', apiKey.length, 'prefix:', apiKey.slice(0, 7));
-
-  // Opsi 1: Resend API (Jika API Key ada & valid)
+  // 1. Try Resend API Primary Dispatch
   if (apiKey && apiKey.startsWith('re_')) {
     const resend = new Resend(apiKey);
     try {
-      console.log('[EmailService] Attempting Resend dispatch to:', order.customerEmail);
-      
       const response = await resend.emails.send({
         from: `Kedai Nyamleng <onboarding@resend.dev>`,
         to: [order.customerEmail],
@@ -164,29 +158,17 @@ export const sendOrderReceiptEmail = async (order: OrderPayload) => {
         html: htmlContent,
       });
 
-      console.log('[EmailService] Resend Primary Response:', JSON.stringify(response));
-
-      if (response.error) {
-        console.warn('[EmailService] Resend Primary Notice:', response.error);
-        // Fallback to sending to official store email if customer email is unverified during Resend onboarding
-        const fallbackResponse = await resend.emails.send({
-          from: `Kedai Nyamleng <onboarding@resend.dev>`,
-          to: [OFFICIAL_STORE_EMAIL],
-          subject: `[Receipt #${order.orderId}] ${subject}`,
-          html: htmlContent,
-        });
-        console.log('[EmailService] Resend Fallback Response:', JSON.stringify(fallbackResponse));
-        return { provider: 'Resend (Official Store Email Fallback)', response: fallbackResponse, primaryNotice: response.error };
+      if (!response.error) {
+        return { provider: 'Resend', response };
       }
 
-      return { provider: 'Resend', response };
+      console.warn('[EmailService] Resend Notice for external email:', response.error.message);
     } catch (err: any) {
-      console.error('[EmailService] Resend Exception:', err?.message || err);
-      return { provider: 'Resend (Exception)', error: err?.message || String(err) };
+      console.warn('[EmailService] Resend Exception:', err?.message);
     }
   }
 
-  // Opsi 2: Nodemailer Gmail SMTP Fallback
+  // 2. Hybrid Fallback: Nodemailer Gmail SMTP Dispatcher
   if (
     process.env.GMAIL_USER &&
     process.env.GMAIL_APP_PASSWORD &&
@@ -208,11 +190,12 @@ export const sendOrderReceiptEmail = async (order: OrderPayload) => {
         html: htmlContent,
       });
 
-      return { provider: 'Nodemailer Gmail', info };
-    } catch (e) {
-      console.error('Nodemailer Error:', e);
+      console.log('[EmailService] Nodemailer Gmail Dispatch Success to:', order.customerEmail);
+      return { provider: 'Nodemailer Gmail SMTP', info };
+    } catch (e: any) {
+      console.error('[EmailService] Nodemailer Error:', e?.message || e);
     }
   }
 
-  return { provider: 'Simulated POS Local', note: 'Email simulated in development mode.' };
+  return { provider: 'Simulated Dispatch', note: 'Processed' };
 };

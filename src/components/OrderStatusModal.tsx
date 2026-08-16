@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   X, 
   CheckCircle2, 
@@ -26,6 +26,9 @@ export const OrderStatusModal: React.FC = () => {
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
+  // Client-side Notification Deduplication Tracker
+  const dispatchedStatusesRef = useRef<Set<string>>(new Set());
+
   // Mounted Hydration Safety Guard
   useEffect(() => {
     setIsMounted(true);
@@ -34,11 +37,18 @@ export const OrderStatusModal: React.FC = () => {
   // Realtime Timestamp Tracker (Seconds elapsed since order creation)
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
 
-  // Helper to send real-time progress updates to customer's WhatsApp
+  // Helper to send real-time progress updates to customer's WhatsApp (Deduplicated)
   const sendWhatsAppProgressUpdate = async (status: OrderStatus) => {
     if (!activeOrder || !activeOrder.customerPhone) return;
 
+    const notifKey = `${activeOrder.orderId}_${status}`;
+    if (dispatchedStatusesRef.current.has(notifKey)) {
+      console.log(`[Client WA Deduplication] ${notifKey} already dispatched. Suppressing duplicate.`);
+      return;
+    }
+
     try {
+      dispatchedStatusesRef.current.add(notifKey);
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
       await fetch(`${baseUrl}/api/whatsapp/notify-progress`, {
         method: 'POST',
@@ -67,7 +77,6 @@ export const OrderStatusModal: React.FC = () => {
     );
     const totalItemQty = activeOrder.items.reduce((acc, i) => acc + i.quantity, 0);
 
-    // Formula: Max prep time + 1 min per extra item (Min: 7 min, Max: 18 min)
     const calculatedMinutes = Math.min(Math.max(maxItemPrep + Math.floor((totalItemQty - 1) * 1), 7), 18);
     return calculatedMinutes;
   }, [activeOrder]);
@@ -98,7 +107,7 @@ export const OrderStatusModal: React.FC = () => {
     return () => clearInterval(interval);
   }, [isOrderStatusOpen, activeOrder]);
 
-  // Real-time Supabase Database Poller for Status Changes from Kasir App
+  // REAL-TIME SUPABASE DATABASE POLLER: STRICTLY DRIVEN BY CORE KASIR APP BUTTON CLICKS!
   useEffect(() => {
     if (!isOrderStatusOpen || !activeOrder) return;
 
@@ -113,13 +122,20 @@ export const OrderStatusModal: React.FC = () => {
         if (data && data.orderStatus) {
           const raw = data.orderStatus.toUpperCase();
           let mappedStatus: OrderStatus = 'CONFIRMED';
-          if (raw === 'ORDER_ACCEPTED' || raw === 'CONFIRMED' || raw === 'PENDING') mappedStatus = 'CONFIRMED';
-          else if (raw === 'IN_PROCESSED' || raw === 'KITCHEN_PROCESSING' || raw === 'PROCESSED') mappedStatus = 'KITCHEN_PROCESSING';
-          else if (raw === 'ORDER_FINISH' || raw === 'READY' || raw === 'COMPLETED') mappedStatus = 'READY';
+          
+          if (raw === 'NEW_ORDER' || raw === 'PENDING') {
+            mappedStatus = 'CONFIRMED'; // Stay at initial step 1 until Cashier accepts
+          } else if (raw === 'ORDER_ACCEPTED' || raw === 'CONFIRMED') {
+            mappedStatus = 'CONFIRMED';
+          } else if (raw === 'IN_PROCESSED' || raw === 'KITCHEN_PROCESSING' || raw === 'PROCESSED') {
+            mappedStatus = 'KITCHEN_PROCESSING';
+          } else if (raw === 'ORDER_FINISH' || raw === 'READY' || raw === 'COMPLETED') {
+            mappedStatus = 'READY';
+          }
 
           if (mappedStatus !== currentStatus) {
             setCurrentStatus(mappedStatus);
-            setNotificationToast(`[POS Update] Status pesanan #${activeOrder.orderId} diperbarui oleh Kasir: ${mappedStatus}`);
+            setNotificationToast(`[POS Update] Status pesanan #${activeOrder.orderId} diperbarui oleh Kasir App: ${mappedStatus}`);
             sendWhatsAppProgressUpdate(mappedStatus);
           }
         }
@@ -133,35 +149,10 @@ export const OrderStatusModal: React.FC = () => {
     return () => clearInterval(dbInterval);
   }, [isOrderStatusOpen, activeOrder, currentStatus]);
 
-  // Derive exact real-time seconds remaining and status
+  // Derive exact real-time seconds remaining
   const orderTimeMs = activeOrder ? new Date(activeOrder.createdAt).getTime() : Date.now();
   const elapsedSeconds = Math.max(Math.floor((nowTimestamp - orderTimeMs) / 1000), 0);
   const remainingSeconds = Math.max(totalTargetSeconds - elapsedSeconds, 0);
-
-  // Sync current status with real-time seconds & dispatch WA notifications
-  useEffect(() => {
-    if (!activeOrder) return;
-
-    if (elapsedSeconds < 10) {
-      if (currentStatus !== 'CONFIRMED') {
-        setCurrentStatus('CONFIRMED');
-        setNotificationToast(`[POS Kedai] Pesanan #${activeOrder.orderId} diterima oleh Kasir!`);
-        sendWhatsAppProgressUpdate('CONFIRMED');
-      }
-    } else if (remainingSeconds > 0) {
-      if (currentStatus !== 'KITCHEN_PROCESSING') {
-        setCurrentStatus('KITCHEN_PROCESSING');
-        setNotificationToast(`[Dapur Kedai] Koki sedang memasak pesanan Anda (Estimasi ${prepTimeMinutes} Menit)...`);
-        sendWhatsAppProgressUpdate('KITCHEN_PROCESSING');
-      }
-    } else {
-      if (currentStatus !== 'READY') {
-        setCurrentStatus('READY');
-        setNotificationToast(`[Kedai Nyamleng] Pesanan #${activeOrder.orderId} Selesai & Siap!`);
-        sendWhatsAppProgressUpdate('READY');
-      }
-    }
-  }, [elapsedSeconds, remainingSeconds, activeOrder, prepTimeMinutes, currentStatus]);
 
   // Auto-dismiss notification toast
   useEffect(() => {
@@ -195,8 +186,8 @@ export const OrderStatusModal: React.FC = () => {
   const steps = [
     {
       id: 'CONFIRMED',
-      label: 'Diterima POS',
-      desc: 'Kasir mengonfirmasi pesanan',
+      label: 'Diterima POS Kasir',
+      desc: 'Kasir mengonfirmasi pesanan baru',
     },
     {
       id: 'KITCHEN_PROCESSING',
@@ -211,9 +202,9 @@ export const OrderStatusModal: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in pb-[env(safe-area-inset-bottom)]">
       <div 
-        className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
+        className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl max-h-[88dvh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -232,7 +223,8 @@ export const OrderStatusModal: React.FC = () => {
           </div>
           <button
             onClick={() => toggleOrderStatus(false)}
-            className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+            className="p-1.5 hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+            aria-label="Tutup Tracking"
           >
             <X className="w-5 h-5 text-white" />
           </button>
@@ -250,7 +242,7 @@ export const OrderStatusModal: React.FC = () => {
               </div>
               <button 
                 onClick={() => setNotificationToast(null)}
-                className="text-white/80 hover:text-white text-xs"
+                className="text-white/80 hover:text-white text-xs cursor-pointer"
               >
                 ✕
               </button>
@@ -268,7 +260,7 @@ export const OrderStatusModal: React.FC = () => {
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
               </p>
               <p className="text-emerald-700 text-[11px] mt-0.5 leading-snug">
-                Notifikasi otomatis & struk telah dikirim ke WhatsApp <span className="font-bold">({activeOrder.customerPhone || OFFICIAL_STORE_WA})</span>. Anda dapat langsung membalas chat WA untuk bertanya ke AI Admin Kedai!
+                Notifikasi otomatis &amp; struk telah dikirim ke WhatsApp <span className="font-bold">({activeOrder.customerPhone || OFFICIAL_STORE_WA})</span>. Anda dapat langsung membalas chat WA untuk bertanya ke AI Admin Kedai!
               </p>
             </div>
           </div>
@@ -289,7 +281,7 @@ export const OrderStatusModal: React.FC = () => {
                   <h3 className="text-xl font-black tracking-tight">{activeOrder.orderId}</h3>
                   <button
                     onClick={handleCopyOrderId}
-                    className="p-1 bg-white/15 hover:bg-white/25 rounded-lg transition-all text-white text-xs flex items-center gap-1"
+                    className="p-1 bg-white/15 hover:bg-white/25 rounded-lg transition-all text-white text-xs flex items-center gap-1 cursor-pointer"
                     title="Salin Nomor Pesanan"
                   >
                     {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
@@ -350,11 +342,11 @@ export const OrderStatusModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Kitchen Live Message Footer */}
+            {/* Kitchen Live Message Footer (Driven Exclusively by POS Kasir App) */}
             <div className="text-center pt-1 text-xs font-semibold text-white/90 relative z-10 flex items-center justify-center gap-1.5">
               <Flame className="w-4 h-4 text-amber-300 animate-bounce" />
               <span>
-                {currentStatus === 'CONFIRMED' && 'Pesanan diterima POS, koki bersiap memasak...'}
+                {currentStatus === 'CONFIRMED' && 'Pesanan baru terkirim ke POS. Menunggu Kasir menekan Terima...'}
                 {currentStatus === 'KITCHEN_PROCESSING' && 'Dapur sedang menggoreng & menyajikan pesanan...'}
                 {currentStatus === 'READY' && 'Pesanan selesai dimasak! Siap disajikan.'}
               </span>
@@ -364,7 +356,7 @@ export const OrderStatusModal: React.FC = () => {
           {/* Stepper Tracking Visualizer */}
           <div className="bg-parchment-soft p-4 rounded-3xl border border-parchment-border space-y-4">
             <h4 className="font-extrabold text-xs uppercase tracking-wider text-gray-500">
-              Tahapan Proses Dapur
+              Tahapan Proses Dapur (Dikontrol Kasir POS)
             </h4>
 
             <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-parchment-border">
@@ -414,7 +406,7 @@ export const OrderStatusModal: React.FC = () => {
           {/* Customer & Store Details Card */}
           <div className="p-4 bg-white rounded-3xl border border-parchment-border space-y-3 text-xs text-charcoal">
             <h4 className="font-extrabold text-xs uppercase tracking-wider text-gray-500 pb-2 border-b border-parchment-border">
-              Rincian Pemesan & Lokasi Kedai
+              Rincian Pemesan &amp; Lokasi Kedai
             </h4>
 
             <div className="grid grid-cols-2 gap-3 text-[11px]">
@@ -450,12 +442,12 @@ export const OrderStatusModal: React.FC = () => {
         </div>
 
         {/* Clean Footer Action */}
-        <div className="p-4 bg-white border-t border-parchment-border flex items-center justify-end">
+        <div className="p-4 bg-white border-t border-parchment-border flex items-center justify-end pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <button
             onClick={() => toggleOrderStatus(false)}
             className="w-full py-3.5 px-6 bg-nyamleng-600 hover:bg-nyamleng-700 active:scale-98 text-white font-extrabold text-sm rounded-2xl shadow-md transition-all cursor-pointer"
           >
-            Tutup Tracking & Kembali ke Menu
+            Tutup Tracking &amp; Kembali ke Menu
           </button>
         </div>
       </div>

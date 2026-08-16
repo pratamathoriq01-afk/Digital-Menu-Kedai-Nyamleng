@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendMetaWhatsAppMessage } from '@/services/whatsappService';
+import { STORE_LOCATION } from '@/types/pos';
+
+// In-Memory Notification Deduplication Cache (Key: `${orderId}_${status}`)
+const dispatchedNotifsCache = new Set<string>();
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,26 +16,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Deduplication Guard: Send EXACTLY ONCE per (orderId + status)
+    const notifKey = `${orderId}_${status}`;
+    if (dispatchedNotifsCache.has(notifKey)) {
+      console.log(`[WA Deduplication Guard] Notification already sent for ${notifKey}. Skipping duplicate.`);
+      return NextResponse.json({
+        success: true,
+        orderId,
+        status,
+        deduplicated: true,
+        message: 'Notification already dispatched once. Duplicate suppressed.',
+      });
+    }
+
     let statusMessage = '';
     if (status === 'CONFIRMED') {
       statusMessage =
-        `*KEDAI NYAMLENG - UPDATE DAPUR REALTIME*\n` +
+        `*KEDAI NYAMLENG MALANG - UPDATE DAPUR REALTIME*\n` +
         `-----------------------------------------\n` +
-        `Halo *${customerName || 'Pelanggan'}*, Pesanan Anda *#${orderId}* telah berhasil diterima oleh Kasir Kedai Nyamleng! 📝\n\n` +
+        `Halo *${customerName || 'Pelanggan'}*, kabar baik! Pesanan Anda *#${orderId}* telah berhasil DITERIMA oleh Kasir Kedai Nyamleng! 📝\n\n` +
         `Koki kami sedang bersiap memasak menu lezat Anda. Mohon ditunggu ya!`;
     } else if (status === 'KITCHEN_PROCESSING') {
       statusMessage =
-        `*KEDAI NYAMLENG - PROSES MASAK DAPUR*\n` +
+        `*KEDAI NYAMLENG MALANG - PROSES MASAK DAPUR*\n` +
         `-----------------------------------------\n` +
         `Halo *${customerName || 'Pelanggan'}*, Koki Kedai Nyamleng saat ini *SEDANG MEMASAK* pesanan Anda *#${orderId}*! 👨‍🍳🔥\n\n` +
         `Estimasi waktu masak & penyajian ± 7-15 menit.`;
     } else if (status === 'READY') {
       const modeText = orderType === 'DELIVERY' 
-        ? `Pesanan Anda sudah siap dan sedang dijemput oleh Kurir Delivery (${deliveryCourier || 'Grab/GoSend/Shopee'}) menuju alamat Anda! 🛵💨`
-        : `Pesanan Anda telah SELESAI dimasak dan siap diambil di Konter Kasir Kedai Nyamleng! 🍱✨`;
+        ? `Pesanan Anda telah SELESAI dimasak dan sedang dijemput oleh *Kurir Delivery (${deliveryCourier || 'GrabSend / GoSend / InDrive / SPX'})* menuju alamat Anda! 🛵💨`
+        : `Pesanan Anda telah SELESAI dimasak dan SIAP diambil!\n\n📍 *Alamat Toko Kedai Nyamleng:*\n${STORE_LOCATION}\nSilakan datang ke toko untuk mengambil pesanan Anda di Konter Kasir! 🍱✨`;
 
       statusMessage =
-        `*KEDAI NYAMLENG - PESANAN SELESAI & SIAP!*\n` +
+        `*KEDAI NYAMLENG MALANG - PESANAN SELESAI & SIAP!*\n` +
         `-----------------------------------------\n` +
         `Halo *${customerName || 'Pelanggan'}*, kabar gembira! Pesanan Anda *#${orderId}* telah SELESAI! 🎉\n\n` +
         `${modeText}\n\n` +
@@ -40,6 +57,10 @@ export async function POST(request: NextRequest) {
 
     if (statusMessage) {
       const dispatchResult = await sendMetaWhatsAppMessage(customerPhone, statusMessage);
+      
+      // Mark as dispatched so duplicate requests are suppressed
+      dispatchedNotifsCache.add(notifKey);
+
       return NextResponse.json({
         success: true,
         orderId,

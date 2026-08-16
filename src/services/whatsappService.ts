@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { OFFICIAL_STORE_WA, OrderPayload } from '@/types/pos';
+import { OFFICIAL_STORE_WA, OrderPayload, STORE_LOCATION } from '@/types/pos';
+import { supabase } from '@/lib/supabaseClient';
 
 export const generateWhatsAppOrderMessage = (order: OrderPayload): string => {
   const formatRupiah = (val: number) =>
@@ -16,27 +17,36 @@ export const generateWhatsAppOrderMessage = (order: OrderPayload): string => {
     .join('\n');
 
   return (
-    `*KEDAI NYAMLENG MALANG - KONFIRMASI PESANAN*\n` +
+    `*KEDAI NYAMLENG MALANG - STRUK E-RECEIPT*\n` +
     `-----------------------------------------\n` +
-    `Halo *${order.customerName}*, terima kasih sudah memesan di Kedai Nyamleng!\n\n` +
+    `Halo *${order.customerName}*, terima kasih sudah memesan di Kedai Nyamleng Malang! 🍱\n\n` +
     `*Detail Struk Pesanan #${order.orderId}:*\n` +
     `• Tipe Order: *${order.orderType === 'TAKEAWAY' ? 'Takeaway (Ambil di Toko)' : 'Delivery (Kurir Antar)'}*\n` +
-    (order.deliveryCourier ? `• Kurir Delivery: *${order.deliveryCourier}*\n` : '') +
+    (order.deliveryCourier ? `• Opsi Kurir: *${order.deliveryCourier}*\n` : '') +
     `• Status Pembayaran: *LUNAS (QRIS Statis)*\n\n` +
     `*Rincian Menu:*\n${itemList}\n\n` +
     (order.discountAmount > 0 ? `• Diskon Promo (${order.appliedVoucherCode || 'Voucher'}): -${formatRupiah(order.discountAmount)}\n` : '') +
     `• Pajak Resto (PB1 10%): ${formatRupiah(order.taxAmount)}\n` +
     `*Total Pembayaran: ${formatRupiah(order.totalAmount)}*\n\n` +
     (order.orderNotes ? `*Catatan Khusus:* _${order.orderNotes}_\n\n` : '') +
-    `Pesanan Anda saat ini sedang disiapkan oleh Koki Kedai Nyamleng! 👨‍🍳🔥\n` +
-    `Silakan balas pesan ini jika ada pertanyaan mengenai pesanan Anda.`
+    `Pesanan Anda telah diterima oleh sistem dan sedang disiapkan! 👨‍🍳🔥\n` +
+    `Balas chat ini jika ada pertanyaan seputar pesanan Anda.`
+  );
+};
+
+export const generateWhatsAppDeliveryAddressRequestMessage = (order: OrderPayload): string => {
+  return (
+    `*KEDAI NYAMLENG MALANG - KONFIRMASI KURIR & ALAMAT* 🛵\n` +
+    `-----------------------------------------\n` +
+    `Halo *${order.customerName}*, untuk pesanan Delivery *#${order.orderId}* via *${order.deliveryCourier || 'Kurir Delivery'}*:\n\n` +
+    `Mohon balas pesan ini dengan *ALAMAT LENGKAP PENGIRIMAN* & *PATOKAN / CATATAN UNTUK KURIR* (misal: warna rumah, pagar, dll).\n\n` +
+    `Tim Kedai Nyamleng akan langsung meneruskan alamat Anda ke Kurir!`
   );
 };
 
 export const getWhatsAppDirectLink = (order: OrderPayload): string => {
   const message = generateWhatsAppOrderMessage(order);
   const encodedText = encodeURIComponent(message);
-  // Normalize WA number (e.g. 085113661387 -> 6285113661387)
   const cleanNumber = OFFICIAL_STORE_WA.replace(/^0/, '62');
   return `https://wa.me/${cleanNumber}?text=${encodedText}`;
 };
@@ -81,21 +91,24 @@ export const processAIWhatsAppBotMessage = (incomingMsg: string, senderPhone: st
   if (lower.includes('menu') || lower.includes('makanan') || lower.includes('harga')) {
     return (
       `Halo! Kedai Nyamleng menyediakan berbagai menu spesial cita rasa Malang:\n` +
-      `• Bebek Goreng Sambal Hitam Madura (Rp 38.000)\n` +
-      `• Ayam Goreng Kremes Nyamleng (Rp 28.000)\n` +
-      `• Rawon Daging Sapi Malang (Rp 32.000)\n` +
-      `• Paket Hemat Berdua (Rp 78.000)\n` +
-      `• Es Teh Manis Jumbo (Rp 6.000)\n\n` +
-      `Anda dapat melihat & memesan langsung melalui link menu digital kami:\nhttps://digital-menu-kedai-nyamleng.vercel.app`
+      `• Nasi Goreng Nyamleng (Rp 18.000)\n` +
+      `• Mie Goreng Jawa (Rp 16.000)\n` +
+      `• Ayam Geprek Sambal Korek (Rp 20.000)\n` +
+      `• Es Teh Manis Jumbo (Rp 5.000)\n` +
+      `• Es Jeruk Peras (Rp 7.000)\n` +
+      `• Kopi Tubruk Malang (Rp 8.000)\n` +
+      `• Tahu Crispy Sambal Kecap (Rp 10.000)\n` +
+      `• Pisang Goreng Keju (Rp 12.000)\n\n` +
+      `Anda dapat melihat & memesan langsung melalui website menu digital kami:\nhttps://digital-menu-kedai-nyamleng.vercel.app`
     );
   }
 
   if (lower.includes('buka') || lower.includes('jam') || lower.includes('alamat') || lower.includes('lokasi')) {
     return (
       `Kedai Nyamleng Malang:\n` +
-      `Alamat: Kota Malang, Jawa Timur\n` +
-      `Jam Operasional: Setiap Hari (10:00 - 22:00 WIB)\n` +
-      `Layanan: Takeaway & Delivery (GrabSend, GoSend, InDrive, Shopee SPX)`
+      `Alamat: ${STORE_LOCATION}\n` +
+      `Jam Operasional: Setiap Hari (09:00 - 22:00 WIB)\n` +
+      `Layanan: Takeaway (Ambil di Toko) & Delivery (GrabSend, GoSend, InDrive Paket, SPX Instant Shopee)`
     );
   }
 
@@ -109,15 +122,15 @@ export const processAIWhatsAppBotMessage = (incomingMsg: string, senderPhone: st
   if (lower.includes('status') || lower.includes('pesanan') || lower.includes('proses')) {
     return (
       `Untuk memantau progress pesanan Anda secara realtime, silakan buka link pemantauan dapur pada website kami ` +
-      `atau kirimkan Nomor Order Anda (contoh: #KDN-123456) agar admin kami bantu cek!`
+      `atau kirimkan Nomor Order Anda (contoh: #KDN-123456) agar AI CS Admin kami bantu cek!`
     );
   }
 
   return (
-    `Halo! Terima kasih telah menghubungi WhatsApp Official Kedai Nyamleng Malang.\n\n` +
-    `Ada yang bisa AI Assistant kami bantu?\n` +
-    `1. Ketik *Menu* untuk lihat daftar menu favorit\n` +
-    `2. Ketik *Lokasi* untuk cek jam buka & alamat toko\n` +
+    `Halo! Terima kasih telah menghubungi WhatsApp Official Kedai Nyamleng Malang. 🍱✨\n\n` +
+    `Ada yang bisa AI CS Assistant kami bantu?\n` +
+    `1. Ketik *Menu* untuk lihat daftar menu makanan\n` +
+    `2. Ketik *Lokasi* untuk cek jam buka & alamat kedai\n` +
     `3. Ketik *Bayar* untuk info pembayaran QRIS\n` +
     `4. Ketik *Status* untuk cek status pesanan Anda\n\n` +
     `Atau pesan langsung melalui website: https://digital-menu-kedai-nyamleng.vercel.app`
@@ -125,18 +138,74 @@ export const processAIWhatsAppBotMessage = (incomingMsg: string, senderPhone: st
 };
 
 export const processAIWhatsAppBotMessageAsync = async (incomingMsg: string, senderPhone: string): Promise<string> => {
+  const openaiKey = (process.env.OPENAI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
   const geminiKey = (process.env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
 
-  if (geminiKey) {
-    try {
-      // 1. Inisialisasi Gemini AI sebagai CS Kedai Nyamleng
-      const genAI = new GoogleGenerativeAI(geminiKey);
+  // 1. Fetch Dynamic Recent Order Context for this customer from Supabase DB
+  let orderContextInfo = '';
+  try {
+    const cleanPhone = senderPhone.replace(/[^0-9]/g, '');
+    const { data: recentOrder } = await supabase
+      .from('Transaction')
+      .select('*, items:TransactionItem(*)')
+      .or(`customerPhone.ilike.%${cleanPhone.slice(-8)}%`)
+      .order('createdAt', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-      // Model gemini-1.5-pro dengan systemInstruction CS Admin Bintang 5 Kedai Nyamleng
+    if (recentOrder) {
+      const itemsText = recentOrder.items?.map((i: any) => `${i.nameSnapshot} (${i.qty}x)`).join(', ') || '';
+      orderContextInfo = `KONTEKS PESANAN TERBARU PELANGGAN:\nNomor Order: #${recentOrder.orderNumber}\nStatus Dapur: ${recentOrder.orderStatus}\nTipe: ${recentOrder.orderType}\nItem: ${itemsText}\nTotal: Rp ${recentOrder.total?.toLocaleString('id-ID')}\nTanggal: ${recentOrder.createdAt}`;
+    }
+  } catch (err) {
+    console.warn('[AI Context Fetch Warning]:', err);
+  }
+
+  const systemPrompt = 
+    `Kamu adalah Customer Service Admin Bintang 5 Kedai Nyamleng Malang yang super ramah, solutif, dan hangat. ` +
+    `Informasi Store: Lokasi di Kota Malang, Jawa Timur. Buka tiap hari 09:00 - 22:00 WIB. ` +
+    `Menu Utama: Nasi Goreng Nyamleng (18k), Mie Goreng Jawa (16k), Ayam Geprek Sambal Korek (20k), Es Teh Jumbo (5k), Es Jeruk (7k), Kopi Tubruk (8k), Tahu Crispy (10k), Pisang Goreng Keju (12k). ` +
+    `Pembayaran: QRIS Statis. Tipe Order: Takeaway (Ambil di Toko) & Delivery (GrabSend, GoSend, InDrive, SPX Shopee). ` +
+    `Link Menu: https://digital-menu-kedai-nyamleng.vercel.app.\n\n` +
+    `${orderContextInfo}\n\n` +
+    `Bila pembeli bertanya tentang pesanan, gunakan data kontekstual di atas untuk menjawab dengan akurat, sopan, dan solutif.`;
+
+  // Option 1: OpenAI GPT-4o-mini Primary Dispatcher
+  if (openaiKey && openaiKey.startsWith('sk-proj-')) {
+    try {
+      console.log('[AI CS Dispatcher] Calling OpenAI GPT-4o-mini API...');
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: incomingMsg },
+          ],
+          temperature: 0.7,
+        }),
+      });
+
+      const data = await response.json();
+      if (data?.choices?.[0]?.message?.content) {
+        return data.choices[0].message.content.trim();
+      }
+    } catch (err) {
+      console.error('[OpenAI API Exception]:', err);
+    }
+  }
+
+  // Option 2: Gemini 1.5 Pro Fallback
+  if (geminiKey && geminiKey.startsWith('AIzaSy')) {
+    try {
+      const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({
         model: 'gemini-1.5-pro',
-        systemInstruction:
-          'Kamu adalah Customer Service Admin Resmi Bintang 5 dari "Kedai Nyamleng Malang". Tugas utama kamu adalah membalas chat pelanggan dengan sangat ramah, hangat, santai tapi profesional, serta solutif dalam membantu masalah pesanan makanan, pertanyaan menu, pembayaran, hingga pengiriman. Informasi Kedai: Berlokasi di Kota Malang, Jawa Timur. Buka setiap hari pukul 10:00 - 22:00 WIB. Menu Favorit: Bebek Goreng Sambal Hitam Madura (Rp 38k), Ayam Goreng Kremes (Rp 28k), Rawon Daging Sapi Malang (Rp 32k), Es Teh Manis Jumbo (Rp 6k), Paket Hemat Berdua (Rp 78k). Pembayaran: Full QRIS Statis All Payment (GoPay, OVO, DANA, ShopeePay, BCA, Mandiri, BRI, BNI, M-Banking). Pengiriman: Kurir Antar Delivery (GrabSend, GoSend, InDrive, Shopee SPX) & Takeaway Ambil di Toko. Website Menu Digital: https://digital-menu-kedai-nyamleng.vercel.app.',
+        systemInstruction: systemPrompt,
       });
 
       const result = await model.generateContent(incomingMsg);
@@ -151,6 +220,6 @@ export const processAIWhatsAppBotMessageAsync = async (incomingMsg: string, send
     }
   }
 
-  // Fallback to rule-based engine
+  // Option 3: Rule-based engine fallback
   return processAIWhatsAppBotMessage(incomingMsg, senderPhone);
 };

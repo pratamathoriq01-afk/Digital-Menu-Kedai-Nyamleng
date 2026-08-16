@@ -12,9 +12,10 @@ datasource db {
 
 model Customer {
   id           String        @id @default(cuid())
+  googleId     String?       @unique
   name         String
   email        String        @unique
-  phone        String
+  phone        String?
   passwordHash String?
   avatarUrl    String?
   createdAt    DateTime      @default(now())

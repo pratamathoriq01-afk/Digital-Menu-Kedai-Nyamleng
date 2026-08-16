@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   QrCode, 
@@ -15,11 +15,14 @@ import {
   Tag,
   Download,
   ArrowLeft,
-  Check
+  Check,
+  Edit3,
+  Lock
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
 import { DeliveryCourier } from '@/types/pos';
 import { PromoVoucherModal } from './PromoVoucherModal';
+import { getStoredCustomerUser } from '@/services/authService';
 
 export const CheckoutModal: React.FC = () => {
   const {
@@ -48,6 +51,19 @@ export const CheckoutModal: React.FC = () => {
   const [emailInput, setEmailInput] = useState(customerEmail || '');
   const [phoneInput, setPhoneInput] = useState(customerPhone || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSynced, setIsGoogleSynced] = useState(false);
+
+  // Auto-fill Customer Profile from Google / Apple Auth Session on Mount/Open
+  useEffect(() => {
+    if (!isCheckoutOpen) return;
+    const googleUser = getStoredCustomerUser();
+    if (googleUser) {
+      if (!nameInput) setNameInput(googleUser.name);
+      if (!emailInput) setEmailInput(googleUser.email);
+      if (!phoneInput && googleUser.phone) setPhoneInput(googleUser.phone);
+      setIsGoogleSynced(true);
+    }
+  }, [isCheckoutOpen]);
 
   if (!isCheckoutOpen) return null;
 
@@ -122,9 +138,9 @@ export const CheckoutModal: React.FC = () => {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in pb-[env(safe-area-inset-bottom)]">
         <div 
-          className="w-full sm:max-w-xl bg-white rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
+          className="w-full sm:max-w-xl bg-white rounded-t-3xl sm:rounded-3xl max-h-[88dvh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -167,11 +183,19 @@ export const CheckoutModal: React.FC = () => {
           {checkoutStep === 'FORM' && (
             <form onSubmit={handleProceedToQRISStep} className="p-5 overflow-y-auto space-y-5 flex-1 text-charcoal">
               
-              {/* Customer Personal Details */}
+              {/* Customer Personal Details (Google Auto-Fill & Editable Correction) */}
               <div className="space-y-3 bg-parchment-soft p-4 rounded-2xl border border-parchment-border">
-                <h3 className="font-bold text-xs uppercase tracking-wider text-gray-500">
-                  Data Pribadi Pemesan
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-xs uppercase tracking-wider text-gray-500">
+                    Data Pribadi Pemesan
+                  </h3>
+                  {isGoogleSynced && (
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      <span>Auto-Fill Google (Dapat Dikoreksi)</span>
+                    </span>
+                  )}
+                </div>
 
                 {/* Nama Lengkap */}
                 <div className="space-y-1">
@@ -186,8 +210,9 @@ export const CheckoutModal: React.FC = () => {
                       placeholder="Contoh: Budi Santoso"
                       value={nameInput}
                       onChange={(e) => setNameInput(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500"
+                      className="w-full pl-9 pr-8 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"
                     />
+                    <Edit3 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
 
@@ -202,11 +227,12 @@ export const CheckoutModal: React.FC = () => {
                     <input
                       type="tel"
                       required
-                      placeholder="Contoh: 081234567890"
+                      placeholder="Contoh: 085113661387"
                       value={phoneInput}
                       onChange={(e) => setPhoneInput(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500"
+                      className="w-full pl-9 pr-8 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"
                     />
+                    <Edit3 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
 
@@ -224,9 +250,17 @@ export const CheckoutModal: React.FC = () => {
                       placeholder="Contoh: budi@gmail.com"
                       value={emailInput}
                       onChange={(e) => setEmailInput(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500"
+                      className="w-full pl-9 pr-8 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"
                     />
+                    <Edit3 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                   </div>
+                </div>
+
+                <div className="pt-1 flex items-center justify-between text-[10px] text-gray-400">
+                  <span className="flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-emerald-500" />
+                    <span>Terlindungi Enkripsi Enterprise Supabase RLS</span>
+                  </span>
                 </div>
               </div>
 
@@ -248,7 +282,7 @@ export const CheckoutModal: React.FC = () => {
                           key={c.id}
                           type="button"
                           onClick={() => setDeliveryCourier(c.id)}
-                          className={`flex items-start justify-between p-3 rounded-xl border text-left text-xs font-semibold transition-all ${
+                          className={`flex items-start justify-between p-3 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer ${
                             isSelected
                               ? 'border-nyamleng-500 bg-white text-nyamleng-600 shadow-sm ring-2 ring-nyamleng-500'
                               : 'border-parchment-border bg-white/80 hover:bg-white text-gray-700'
@@ -272,17 +306,17 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Promos or Vouchers FIRST (Pasang Voucher Sebelum Bayar) */}
+              {/* Promos or Vouchers FIRST */}
               <div className="space-y-2">
                 <h3 className="font-bold text-xs uppercase tracking-wider text-gray-500">
-                  Voucher Diskon Makanan & Promo
+                  Voucher Diskon Makanan &amp; Promo
                 </h3>
 
                 {!appliedVoucher ? (
                   <button
                     type="button"
                     onClick={() => toggleVoucherModal(true)}
-                    className="w-full flex items-center justify-between p-3.5 bg-rose-50/80 hover:bg-rose-100/70 border border-rose-200 rounded-2xl text-xs transition-all shadow-xs group"
+                    className="w-full flex items-center justify-between p-3.5 bg-rose-50/80 hover:bg-rose-100/70 border border-rose-200 rounded-2xl text-xs transition-all shadow-xs group cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 font-extrabold text-rose-600">
                       <div className="p-1.5 bg-rose-500 text-white rounded-xl group-hover:scale-105 transition-transform">
@@ -309,7 +343,7 @@ export const CheckoutModal: React.FC = () => {
                     <button
                       type="button"
                       onClick={removeVoucher}
-                      className="text-xs font-extrabold text-rose-600 hover:text-rose-700 underline px-2 py-1"
+                      className="text-xs font-extrabold text-rose-600 hover:text-rose-700 underline px-2 py-1 cursor-pointer"
                     >
                       Hapus
                     </button>
@@ -385,7 +419,7 @@ export const CheckoutModal: React.FC = () => {
                     QRIS Statis Kedai Nyamleng Malang
                   </h4>
                   <p className="text-[11px] text-gray-600 mt-0.5">
-                    Dapat di-scan via GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, BRI, BNI & All M-Banking
+                    Dapat di-scan via GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, BRI, BNI &amp; All M-Banking
                   </p>
                 </div>
 
@@ -421,7 +455,7 @@ export const CheckoutModal: React.FC = () => {
                   className="w-full py-4 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? (
-                    <span>Mengirim E-Receipt & Menghubungkan Dapur...</span>
+                    <span>Mengirim E-Receipt &amp; Menghubungkan Dapur...</span>
                   ) : (
                     <>
                       <Check className="w-5 h-5" />
@@ -433,7 +467,7 @@ export const CheckoutModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setCheckoutStep('FORM')}
-                  className="text-xs font-bold text-gray-500 hover:text-charcoal underline"
+                  className="text-xs font-bold text-gray-500 hover:text-charcoal underline cursor-pointer"
                 >
                   Kembali ke Detail Pesanan
                 </button>

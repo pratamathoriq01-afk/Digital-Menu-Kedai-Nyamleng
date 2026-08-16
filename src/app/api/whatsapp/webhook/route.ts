@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processAIWhatsAppBotMessageAsync, sendMetaWhatsAppMessage } from '@/services/whatsappService';
 
-// Fungsi GET ini dipakai Meta HANYA untuk ngetes kecocokan Token saat pertama kali disambungkan
+// GET Handler: Digunakan oleh Meta Developer Dashboard saat verifikasi Webhook URL
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
@@ -9,23 +9,39 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  // Tarik token dari file .env (dengan sanitasi string)
   const VERIFY_TOKEN = (process.env.WA_VERIFY_TOKEN || 'nyamleng_rahasia_123').trim().replace(/^["']|["']$/g, '');
 
-  // Cek apakah mode-nya subscribe dan tokennya cocok
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('Webhook berhasil disambungkan!');
+    console.log('[WhatsApp Webhook GET] Meta Webhook Verification Success!');
     return new NextResponse(challenge, { status: 200 });
   } else {
+    console.warn('[WhatsApp Webhook GET] Token mismatch:', token, 'expected:', VERIFY_TOKEN);
     return new NextResponse('Akses Ditolak', { status: 403 });
   }
 }
 
-// POST Handler: Menerima pesan masuk Meta WhatsApp Cloud API & membalas dengan Gemini AI Bot
+// Helper Async Dispatcher function (Runs in background without blocking Meta HTTP response)
+async function handleAsyncAiReply(fromNumber: string, incomingText: string) {
+  try {
+    console.log(`[WhatsApp AI Agent Background Task] Processing message from ${fromNumber}: "${incomingText}"`);
+    
+    // 1. Generate OpenAI GPT-4o-mini CS Reply
+    const botReply = await processAIWhatsAppBotMessageAsync(incomingText, fromNumber);
+    console.log(`[WhatsApp AI Agent Background Task] Reply generated for ${fromNumber}:\n${botReply}`);
+
+    // 2. Dispatch Reply via Meta WhatsApp Cloud API
+    const dispatchResult = await sendMetaWhatsAppMessage(fromNumber, botReply);
+    console.log(`[WhatsApp AI Agent Background Task] Meta API Dispatch Result:`, dispatchResult);
+  } catch (err) {
+    console.error('[WhatsApp AI Agent Background Task Error]:', err);
+  }
+}
+
+// POST Handler: Menerima event pesan masuk dari Meta WhatsApp Cloud API
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('[WhatsApp Webhook POST] Received payload:', JSON.stringify(body));
+    console.log('[WhatsApp Webhook POST Payload Received]:', JSON.stringify(body));
 
     // Extract message content if payload is from Meta WhatsApp Cloud API
     const entry = body?.entry?.[0];
@@ -37,37 +53,37 @@ export async function POST(request: NextRequest) {
       const fromNumber = message.from;
       const text = message.text?.body || '';
 
-      // 1. Hasilkan Jawaban dari Gemini 1.5 Pro AI Admin
-      const botReply = await processAIWhatsAppBotMessageAsync(text, fromNumber);
-      console.log(`[WhatsApp Gemini AI Bot] Generated Reply for ${fromNumber}: ${botReply}`);
+      // Trigger background processing asynchronously (Non-blocking)
+      handleAsyncAiReply(fromNumber, text);
 
-      // 2. KIRIMKAN BALASAN AI OTOMATIS KE WHATSAPP PEMBELI VIA META CLOUD API
+      // Return 200 OK IMMEDIATELY to Meta in < 50ms to prevent Meta Webhook Timeout
+      return NextResponse.json(
+        { success: true, status: 'EVENT_RECEIVED', recipient: fromNumber },
+        { status: 200 }
+      );
+    }
+
+    // Direct JSON message simulation support (For local developer testing)
+    if (body.message && body.from) {
+      const fromNumber = body.from;
+      const text = body.message;
+
+      // For direct developer simulation requests, execute & return full result
+      const botReply = await processAIWhatsAppBotMessageAsync(text, fromNumber);
       const dispatchResult = await sendMetaWhatsAppMessage(fromNumber, botReply);
-      console.log(`[WhatsApp Meta Cloud API Dispatch] Result:`, dispatchResult);
 
       return NextResponse.json({
         success: true,
         recipient: fromNumber,
+        incomingMessage: text,
         replyMessage: botReply,
         dispatchResult,
       });
     }
 
-    // Direct JSON message simulation support
-    if (body.message && body.from) {
-      const botReply = await processAIWhatsAppBotMessageAsync(body.message, body.from);
-      const dispatchResult = await sendMetaWhatsAppMessage(body.from, botReply);
-      return NextResponse.json({
-        success: true,
-        recipient: body.from,
-        replyMessage: botReply,
-        dispatchResult,
-      });
-    }
-
-    return NextResponse.json({ success: true, message: 'Webhook event received' });
+    return NextResponse.json({ success: true, message: 'Webhook event processed' }, { status: 200 });
   } catch (error: any) {
-    console.error('[WhatsApp Webhook Error]:', error);
+    console.error('[WhatsApp Webhook POST Error]:', error);
     return NextResponse.json(
       { success: false, message: 'Webhook processing error', error: error?.message },
       { status: 500 }

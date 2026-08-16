@@ -1,12 +1,21 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, ShoppingBag, Bike, Clock, MapPin, Sparkles, Star, ShieldCheck } from 'lucide-react';
+import { Search, ShoppingBag, Bike, Clock, MapPin, Sparkles, Star, ShieldCheck, Menu, History, User } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
 import { OrderType, STORE_LOCATION } from '@/types/pos';
 import { Logo } from './Logo';
+import { CustomerUser } from '@/services/authService';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onOpenSidebarDrawer?: () => void;
+  currentUser?: CustomerUser | null;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  onOpenSidebarDrawer,
+  currentUser,
+}) => {
   const { 
     orderType, 
     setOrderType, 
@@ -50,18 +59,40 @@ export const Header: React.FC = () => {
       {/* Top Utility Bar with Realtime Clock & Store Location */}
       <div className="bg-charcoal text-white py-2 px-4">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center text-xs gap-2">
+          
+          {/* Burger Bar (Garis Tiga) & Customer Profile Trigger */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onOpenSidebarDrawer}
+              className="p-1.5 bg-nyamleng-600 hover:bg-nyamleng-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer active:scale-95"
+              title="Buka Riwayat Pesanan Saya & Profil Akun"
+            >
+              <Menu className="w-4 h-4 stroke-[2.5]" />
+              <span className="hidden sm:inline">Riwayat Pesanan</span>
+            </button>
+
+            {currentUser && (
+              <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-full border border-white/15 text-[11px] font-semibold text-amber-200">
+                <img
+                  src={currentUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.email)}`}
+                  alt={currentUser.name}
+                  className="w-4 h-4 rounded-full border border-amber-300 bg-white"
+                />
+                <span className="max-w-[100px] truncate">{currentUser.name}</span>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2 font-medium">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-white font-bold flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5 text-nyamleng-400" />
               {STORE_LOCATION}
             </span>
-            <span className="hidden sm:inline text-gray-500">•</span>
-            <span className="hidden sm:inline text-gray-300">Kuliner Khas Jawa Asli</span>
           </div>
 
           {/* Realtime Live Clock Display */}
-          <div className="flex items-center gap-1.5 font-mono text-[11px] sm:text-xs text-amber-300 font-semibold bg-white/10 px-3 py-0.5 rounded-full border border-white/15 shadow-xs">
+          <div className="hidden md:flex items-center gap-1.5 font-mono text-[11px] sm:text-xs text-amber-300 font-semibold bg-white/10 px-3 py-0.5 rounded-full border border-white/15 shadow-xs">
             <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin-slow" />
             <span>{timeString || 'Loading time...'}</span>
           </div>
@@ -105,7 +136,7 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Bar: Order Type Switcher & Search Bar (Cleaned Duplicate Cart Button) */}
+      {/* Main Bar: Order Type Switcher & Search Bar */}
       <div className="max-w-7xl mx-auto px-4 py-3.5">
         <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
           
