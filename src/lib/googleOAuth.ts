@@ -34,14 +34,64 @@ export const defaultScopes = [
 ];
 
 /**
- * 2. Generate a secure 32-byte hex random state string to mitigate CSRF attacks (replaces req.session.state)
+ * 2. Validate Redirect URI according to Google OAuth 2.0 Security Rules
+ */
+export const validateGoogleRedirectUri = (uri: string): { isValid: boolean; reason?: string } => {
+  try {
+    const parsed = new URL(uri);
+
+    // Rule 1: Scheme must be HTTPS (localhost exempted)
+    const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+    if (parsed.protocol !== 'https:' && !isLocalhost) {
+      return { isValid: false, reason: 'Redirect URI must use the HTTPS scheme, not plain HTTP.' };
+    }
+
+    // Rule 2: Host cannot be raw IP address (localhost exempted)
+    const isRawIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(parsed.hostname);
+    if (isRawIp && !isLocalhost) {
+      return { isValid: false, reason: 'Hosts cannot be raw IP addresses (except localhost).' };
+    }
+
+    // Rule 3: Host domain cannot be googleusercontent.com
+    if (parsed.hostname.endsWith('googleusercontent.com')) {
+      return { isValid: false, reason: 'Host domains cannot be googleusercontent.com.' };
+    }
+
+    // Rule 4: Cannot contain userinfo (username:password@host)
+    if (parsed.username || parsed.password) {
+      return { isValid: false, reason: 'Redirect URIs cannot contain userinfo subcomponents.' };
+    }
+
+    // Rule 5: Cannot contain path traversal (/.. or \..)
+    if (parsed.pathname.includes('/..') || parsed.pathname.includes('\\..')) {
+      return { isValid: false, reason: 'Redirect URIs cannot contain path traversal (/.. or \\..).' };
+    }
+
+    // Rule 6: Cannot contain hash fragments
+    if (parsed.hash) {
+      return { isValid: false, reason: 'Redirect URIs cannot contain fragment components (#).' };
+    }
+
+    // Rule 7: Cannot contain wildcards (*) or null characters
+    if (uri.includes('*') || uri.includes('%00') || uri.includes('\0')) {
+      return { isValid: false, reason: 'Redirect URIs cannot contain wildcard or null characters.' };
+    }
+
+    return { isValid: true };
+  } catch {
+    return { isValid: false, reason: 'Invalid URL formatting.' };
+  }
+};
+
+/**
+ * 3. Generate a secure 32-byte hex random state string to mitigate CSRF attacks
  */
 export const generateOAuthState = (): string => {
   return crypto.randomBytes(32).toString('hex');
 };
 
 /**
- * 3. Generate Google OAuth Authorization URL with offline access, incremental scopes, and CSRF state token
+ * 4. Generate Google OAuth Authorization URL with offline access, incremental scopes, and CSRF state token
  */
 export const generateGoogleAuthorizationUrl = (customScopes?: string[], state?: string) => {
   const oauthState = state || generateOAuthState();
@@ -56,7 +106,15 @@ export const generateGoogleAuthorizationUrl = (customScopes?: string[], state?: 
 };
 
 /**
- * 4. Token Exchange Helper (code -> tokens)
+ * 5. Incremental Authorization Helper: Requests additional scopes dynamically while preserving combined permissions
+ */
+export const generateIncrementalAuthUrl = (additionalScopes: string[], state?: string) => {
+  const combinedScopes = Array.from(new Set([...defaultScopes, ...additionalScopes]));
+  return generateGoogleAuthorizationUrl(combinedScopes, state);
+};
+
+/**
+ * 6. Token Exchange Helper (code -> tokens)
  */
 export const getGoogleTokensFromCode = async (code: string) => {
   const { tokens } = await oauth2Client.getToken(code);
@@ -69,7 +127,7 @@ export const setGoogleCredentials = (credentials: Credentials) => {
 };
 
 /**
- * 5. Call Google UserInfo API on behalf of the authorized user account
+ * 7. Call Google UserInfo API on behalf of the authorized user account
  */
 export const fetchGoogleUserProfile = async (client?: OAuth2Client) => {
   const oauth2 = google.oauth2({ version: 'v2', auth: client || oauth2Client });
@@ -78,7 +136,7 @@ export const fetchGoogleUserProfile = async (client?: OAuth2Client) => {
 };
 
 /**
- * 6. Call Google Drive API (drive.metadata.readonly)
+ * 8. Call Google Drive API (drive.metadata.readonly)
  */
 export const fetchGoogleDriveFiles = async (client?: OAuth2Client, pageSize: number = 10) => {
   const drive = google.drive({ version: 'v3', auth: client || oauth2Client });
@@ -90,7 +148,7 @@ export const fetchGoogleDriveFiles = async (client?: OAuth2Client, pageSize: num
 };
 
 /**
- * 7. Call Google Calendar API (calendar.readonly)
+ * 9. Call Google Calendar API (calendar.readonly)
  */
 export const fetchGoogleCalendarEvents = async (client?: OAuth2Client, maxResults: number = 10) => {
   const calendar = google.calendar({ version: 'v3', auth: client || oauth2Client });
@@ -105,7 +163,7 @@ export const fetchGoogleCalendarEvents = async (client?: OAuth2Client, maxResult
 };
 
 /**
- * 8. Check if a specific scope has been granted in tokens.scope
+ * 10. Check if a specific scope has been granted in tokens.scope
  */
 export const hasGrantedScope = (grantedScopes: string | string[] | undefined, targetScope: string): boolean => {
   if (!grantedScopes) return false;
@@ -116,7 +174,7 @@ export const hasGrantedScope = (grantedScopes: string | string[] | undefined, ta
 };
 
 /**
- * 9. Verify granted scopes for profile, email, Drive, and Calendar
+ * 11. Verify granted scopes for profile, email, Drive, and Calendar
  */
 export const checkGrantedOAuthScopes = (tokens: Credentials) => {
   const scopeStr = tokens.scope || '';
@@ -130,7 +188,7 @@ export const checkGrantedOAuthScopes = (tokens: Credentials) => {
 };
 
 /**
- * 10. Revoke a Google OAuth 2.0 Access Token / Refresh Token (POST https://oauth2.googleapis.com/revoke)
+ * 12. Revoke a Google OAuth 2.0 Access Token / Refresh Token (POST https://oauth2.googleapis.com/revoke)
  */
 export const revokeGoogleToken = async (token: string) => {
   try {
