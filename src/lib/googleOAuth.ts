@@ -77,3 +77,77 @@ export const revokeGoogleToken = async (token: string) => {
     return { success: false, error: err?.message };
   }
 };
+
+export interface GoogleOAuthErrorDiagnostic {
+  code: string;
+  title: string;
+  description: string;
+  resolution: string;
+}
+
+/**
+ * Diagnostic mapping for standard Google OAuth 2.0 Error Codes
+ */
+export const parseGoogleOAuthError = (errorCode: string): GoogleOAuthErrorDiagnostic => {
+  const code = errorCode.toLowerCase().trim();
+
+  switch (code) {
+    case 'redirect_uri_mismatch':
+      return {
+        code: 'redirect_uri_mismatch',
+        title: 'Redirect URI Tidak Cocok',
+        description: 'URL Callback redirect_uri yang dikirim dalam request otorisasi tidak terdaftar di Authorized Redirect URIs Google Cloud Console.',
+        resolution: 'Buka Google Cloud Console > Credentials > Edit Client ID, lalu tambahkan "https://digital-menu-kedai-nyamleng.vercel.app/api/auth/google/callback" ke Authorized redirect URIs.'
+      };
+    case 'disallowed_useragent':
+      return {
+        code: 'disallowed_useragent',
+        title: 'Embedded WebView Tidak Diizinkan',
+        description: 'Google menolak otorisasi OAuth dari browser WebView yang tertanam (misal WebView aplikasi internal iOS WKWebView).',
+        resolution: 'Buka link otorisasi di browser default sistem operasi (Chrome, Safari, SFSafariViewController).'
+      };
+    case 'invalid_client':
+      return {
+        code: 'invalid_client',
+        title: 'Client Secret / ID Tidak Valid',
+        description: 'Google Client Secret atau Client ID yang digunakan dalam request tidak cocok.',
+        resolution: 'Periksa GOOGLE_CLIENT_SECRET dan NEXT_PUBLIC_GOOGLE_CLIENT_ID di environment variables.'
+      };
+    case 'deleted_client':
+      return {
+        code: 'deleted_client',
+        title: 'OAuth Client Telah Dihapus',
+        description: 'OAuth Client ID yang digunakan telah dihapus dari Google Cloud Console.',
+        resolution: 'Pulihkan OAuth Client ID di Google Cloud Console (dalam 30 hari) atau buat Client ID baru.'
+      };
+    case 'invalid_grant':
+      return {
+        code: 'invalid_grant',
+        title: 'Token Kadaluwarsa / Tidak Valid',
+        description: 'Refresh token atau authorization code telah kadaluwarsa atau dibatalkan oleh pengguna.',
+        resolution: 'Lakukan autentikasi ulang pembeli untuk mendapatkan refresh_token baru.'
+      };
+    case 'admin_policy_enforced':
+      return {
+        code: 'admin_policy_enforced',
+        title: 'Dibatasi Kebijakan Admin Workspace',
+        description: 'Akun Google Workspace pengguna dibatasi oleh kebijakan Administrator Google Workspace.',
+        resolution: 'Minta Administrator Google Workspace untuk menyetujui izin aplikasi Kedai Nyamleng.'
+      };
+    case 'org_internal':
+      return {
+        code: 'org_internal',
+        title: 'Dibatasi Organisasi Internal',
+        description: 'Project Google OAuth hanya diizinkan untuk pengguna dalam organisasi Google Cloud tertentu.',
+        resolution: 'Ubah User Type di OAuth Consent Screen Google Cloud Console menjadi "External".'
+      };
+    case 'invalid_request':
+    default:
+      return {
+        code: code || 'invalid_request',
+        title: 'Request Otorisasi Tidak Valid',
+        description: 'Request otorisasi tidak diformat dengan benar atau ada parameter wajib yang hilang.',
+        resolution: 'Pastikan seluruh parameter (client_id, redirect_uri, response_type, scope, state) terisi dengan benar.'
+      };
+  }
+};
