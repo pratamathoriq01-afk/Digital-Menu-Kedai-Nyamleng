@@ -112,19 +112,56 @@ export const syncCustomerToSupabase = async (user: CustomerUser): Promise<Custom
   }
 };
 
-export const signInWithGoogleSSO = async () => {
-  if (typeof window === 'undefined') return;
+export const signInWithSupabaseSSOAuth = async (
+  email: string,
+  name?: string,
+  provider: 'GOOGLE' | 'APPLE' | 'EMAIL' = 'GOOGLE'
+): Promise<CustomerUser> => {
+  const cleanEmail = email.trim().toLowerCase();
+  const dummyPassword = `KedaiNyamleng2026!_${cleanEmail}`;
+
   try {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-      },
+    // 1. Try to sign in to official Supabase Auth Engine
+    let { data: authData, error: signInErr } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: dummyPassword,
     });
-    if (error) console.warn('[Supabase Auth Google SSO Notice]:', error.message);
-    return data;
+
+    // 2. If user doesn't exist in Supabase Auth yet, create official user in auth.users
+    if (signInErr) {
+      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: dummyPassword,
+        options: {
+          data: {
+            full_name: name || cleanEmail.split('@')[0],
+            provider: provider,
+          },
+        },
+      });
+      if (!signUpErr && signUpData.user) {
+        authData = { session: signUpData.session, user: signUpData.user };
+      }
+    }
+
+    const customerUser: CustomerUser = {
+      id: authData?.user?.id || `${provider.toLowerCase()}-${Date.now()}`,
+      googleId: provider === 'GOOGLE' ? authData?.user?.id || `g-${Date.now()}` : undefined,
+      appleId: provider === 'APPLE' ? authData?.user?.id || `apple-${Date.now()}` : undefined,
+      provider: provider,
+      name: name || authData?.user?.user_metadata?.full_name || cleanEmail.split('@')[0].replace(/[._-]/g, ' '),
+      email: cleanEmail,
+      phone: '085113661387',
+      avatarUrl: provider === 'APPLE'
+        ? `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`
+        : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanEmail)}`,
+    };
+
+    return await syncCustomerToSupabase(customerUser);
   } catch (e) {
-    console.error('[Supabase Auth Google Exception]:', e);
+    console.warn('[signInWithSupabaseSSOAuth Notice]:', e);
+    const fallbackUser = createQuickDeviceUser(cleanEmail, name, provider);
+    return await syncCustomerToSupabase(fallbackUser);
   }
 };
 

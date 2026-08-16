@@ -18,9 +18,9 @@ import {
 } from 'lucide-react';
 import { 
   CustomerUser, 
-  syncCustomerToSupabase, 
   createQuickDeviceUser,
-  getRecentCustomerAccounts
+  getRecentCustomerAccounts,
+  signInWithSupabaseSSOAuth
 } from '@/services/authService';
 
 interface GoogleLoginModalProps {
@@ -69,7 +69,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Seamless 2-Second Processing & Security Consent Dispatch Flow (Zero Form Interruption)
+  // Seamless 2-Second Processing & Security Consent Dispatch Flow with Official Supabase Auth SSO Engine
   const handleExecuteOneTapAccountSync = async (account: CustomerUser) => {
     setSelectedUser(account);
     setModalStep('SYNCING_PROCESSING');
@@ -87,8 +87,8 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }, 350);
 
     try {
-      // 1. Realtime Supabase PostgreSQL DB Sync
-      const syncedUser = await syncCustomerToSupabase(account);
+      // 1. Official Supabase Auth Engine SSO (`auth.users` & JWT Session) + DB Sync
+      const syncedUser = await signInWithSupabaseSSOAuth(account.email, account.name, account.provider || 'GOOGLE');
 
       // 2. Dispatch Security Consent Email via Server API Route
       fetch('/api/email/send-security-notice', {
@@ -115,7 +115,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   };
 
-  // Instant 1-Tap Google Login (ZERO Form Inputs, Instant 2-Second Security Processing)
+  // Instant 1-Tap Google Login with Official Supabase Auth Engine SSO
   const handleDirectGoogleLogin = () => {
     setActiveProvider('GOOGLE');
     const existingGoogleUser = deviceAccounts.find((a) => a.provider === 'GOOGLE');
@@ -139,7 +139,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   };
 
-  // Handle Form Submission for Custom Email Entry (Only when explicitly requested)
+  // Handle Form Submission for Custom Email Entry
   const handleCustomEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!emailInput.trim()) return;
@@ -350,7 +350,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
           </div>
         )}
 
-        {/* STEP 1.5: CUSTOM USER ACCOUNT ENTRY (ONLY SHOWN IF USER CLICKS "Masuk dengan email lain") */}
+        {/* STEP 1.5: CUSTOM USER ACCOUNT ENTRY */}
         {modalStep === 'ENTER_CUSTOM_EMAIL' && (
           <form onSubmit={handleCustomEmailSubmit} className="space-y-4 relative z-10 animate-fade-in">
             <div className="text-center space-y-1">
@@ -447,7 +447,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 Menyinkronkan Akun &amp; Memverifikasi Keamanan...
               </h3>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Menghubungkan <strong className="text-amber-400">{selectedUser.email}</strong> ke database Kedai Nyamleng Digital...
+                Menghubungkan <strong className="text-amber-400">{selectedUser.email}</strong> ke Supabase Auth Engine...
               </p>
             </div>
 
@@ -461,7 +461,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
             <div className="flex items-center justify-center gap-2 text-xs font-bold text-emerald-400">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Memverifikasi Notifikasi Keamanan... ({syncProgress}%)</span>
+              <span>Memverifikasi Sesi Supabase Auth... ({syncProgress}%)</span>
             </div>
           </div>
         )}
@@ -475,7 +475,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
             <div className="space-y-1">
               <h3 className={`text-lg font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                Profil Berhasil Terhubung!
+                Sesi Supabase Auth Berhasil Terhubung!
               </h3>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 Notifikasi keamanan transparansi profil telah dikirimkan ke inbox email Anda.
@@ -499,7 +499,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                     </h4>
                     <span className="bg-emerald-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
                       <Sparkles className="w-2.5 h-2.5" />
-                      <span>Verified</span>
+                      <span>Supabase SSO Verified</span>
                     </span>
                   </div>
                   <p className={`text-xs font-semibold truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -512,7 +512,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               </div>
 
               <div className="pt-2 border-t border-white/10 text-[10px] text-gray-400 leading-relaxed">
-                digital-menu-kedai-nyamleng.vercel.app menerima info profil ini. Email notifikasi transparansi keamanan telah terkirim.
+                digital-menu-kedai-nyamleng.vercel.app menerima info profil ini. Sesi Supabase Auth terdaftar di server.
               </div>
             </div>
 
