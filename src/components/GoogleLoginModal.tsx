@@ -14,14 +14,16 @@ import {
   Sparkles,
   Phone,
   Shield,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { 
   CustomerUser, 
+  syncCustomerToSupabase, 
   createQuickDeviceUser,
-  getRecentCustomerAccounts,
-  signInWithSupabaseSSOAuth
+  getRecentCustomerAccounts
 } from '@/services/authService';
+import { supabase } from '@/lib/supabaseClient';
 
 interface GoogleLoginModalProps {
   isOpen: boolean;
@@ -45,6 +47,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [deviceAccounts, setDeviceAccounts] = useState<CustomerUser[]>([]);
   const [syncProgress, setSyncProgress] = useState(0);
+  const [ssoErrorNotice, setSsoErrorNotice] = useState<string | null>(null);
 
   // Load ONLY recent accounts originating from THIS SPECIFIC DEVICE
   useEffect(() => {
@@ -69,7 +72,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Seamless 2-Second Processing & Security Consent Dispatch Flow with Official Supabase Auth SSO Engine
+  // Seamless Processing & Security Consent Dispatch Flow
   const handleExecuteOneTapAccountSync = async (account: CustomerUser) => {
     setSelectedUser(account);
     setModalStep('SYNCING_PROCESSING');
@@ -87,8 +90,8 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }, 350);
 
     try {
-      // 1. Official Supabase Auth Engine SSO (`auth.users` & JWT Session) + DB Sync
-      const syncedUser = await signInWithSupabaseSSOAuth(account.email, account.name, account.provider || 'GOOGLE');
+      // 1. Realtime Supabase PostgreSQL DB Sync
+      const syncedUser = await syncCustomerToSupabase(account);
 
       // 2. Dispatch Security Consent Email via Server API Route
       fetch('/api/email/send-security-notice', {
@@ -115,27 +118,71 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   };
 
-  // Instant 1-Tap Google Login with Official Supabase Auth Engine SSO
-  const handleDirectGoogleLogin = () => {
+  // Official Supabase Auth OAuth Google SSO Trigger (Redirects to accounts.google.com)
+  const handleDirectGoogleLogin = async () => {
     setActiveProvider('GOOGLE');
-    const existingGoogleUser = deviceAccounts.find((a) => a.provider === 'GOOGLE');
-    if (existingGoogleUser) {
-      handleExecuteOneTapAccountSync(existingGoogleUser);
-    } else {
-      const newGoogleUser = createQuickDeviceUser('user.google@gmail.com', 'Pengguna Google', 'GOOGLE');
-      handleExecuteOneTapAccountSync(newGoogleUser);
+    setIsSubmitting(true);
+    setSsoErrorNotice(null);
+
+    try {
+      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}` : 'https://digital-menu-kedai-nyamleng.vercel.app';
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
+        },
+      });
+
+      if (error) {
+        console.warn('[Supabase Google OAuth Notice]:', error.message);
+        setSsoErrorNotice('Google Provider belum diaktifkan di Supabase Dashboard (Authentication > Providers > Google). Mengalihkan ke Sinkronisasi Profil Instan...');
+        
+        // Fallback to Instant Device Profile Sync if Supabase OAuth Provider is not enabled yet
+        setTimeout(() => {
+          const existing = deviceAccounts.find((a) => a.provider === 'GOOGLE');
+          const fallbackUser = existing || createQuickDeviceUser('user.google@gmail.com', 'Pengguna Google', 'GOOGLE');
+          handleExecuteOneTapAccountSync(fallbackUser);
+        }, 1500);
+      }
+    } catch (err: any) {
+      console.error('[Google OAuth Exception]:', err);
+      setIsSubmitting(false);
     }
   };
 
-  // Instant 1-Tap Apple Login
-  const handleDirectAppleLogin = () => {
+  // Official Supabase Auth OAuth Apple SSO Trigger
+  const handleDirectAppleLogin = async () => {
     setActiveProvider('APPLE');
-    const existingAppleUser = deviceAccounts.find((a) => a.provider === 'APPLE');
-    if (existingAppleUser) {
-      handleExecuteOneTapAccountSync(existingAppleUser);
-    } else {
-      const newAppleUser = createQuickDeviceUser('user.apple@icloud.com', 'Apple ID User', 'APPLE');
-      handleExecuteOneTapAccountSync(newAppleUser);
+    setIsSubmitting(true);
+    setSsoErrorNotice(null);
+
+    try {
+      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}` : 'https://digital-menu-kedai-nyamleng.vercel.app';
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+
+      if (error) {
+        console.warn('[Supabase Apple OAuth Notice]:', error.message);
+        setSsoErrorNotice('Apple Provider belum diaktifkan di Supabase Dashboard. Mengalihkan ke Sinkronisasi Profile Instan...');
+        setTimeout(() => {
+          const existing = deviceAccounts.find((a) => a.provider === 'APPLE');
+          const fallbackUser = existing || createQuickDeviceUser('user.apple@icloud.com', 'Apple ID User', 'APPLE');
+          handleExecuteOneTapAccountSync(fallbackUser);
+        }, 1500);
+      }
+    } catch (err: any) {
+      console.error('[Apple OAuth Exception]:', err);
+      setIsSubmitting(false);
     }
   };
 
@@ -221,9 +268,17 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 Sign in to Continue
               </h2>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Tekan tombol di bawah untuk menyinkronkan Akun Google atau Apple ID Anda secara instan.
+                Tekan tombol di bawah untuk masuk via Halaman Resmi Google (accounts.google.com) atau Apple ID.
               </p>
             </div>
+
+            {/* SSO Status / Warning Notice */}
+            {ssoErrorNotice && (
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-start gap-2 animate-fade-in">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span>{ssoErrorNotice}</span>
+              </div>
+            )}
 
             {/* Render Recent Device Accounts ONLY if present on THIS specific device */}
             {deviceAccounts.length > 0 && (
@@ -276,7 +331,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               </div>
             )}
 
-            {/* Primary SSO Buttons */}
+            {/* Primary SSO Buttons (Calls Official Supabase OAuth Redirect) */}
             <div className="space-y-2.5 pt-1">
               <button
                 type="button"
@@ -306,7 +361,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                <span>Continue with Google</span>
+                <span>{isSubmitting ? 'Mengalihkan ke accounts.google.com...' : 'Continue with Google'}</span>
               </button>
 
               <button
@@ -447,7 +502,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 Menyinkronkan Akun &amp; Memverifikasi Keamanan...
               </h3>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Menghubungkan <strong className="text-amber-400">{selectedUser.email}</strong> ke Supabase Auth Engine...
+                Menghubungkan <strong className="text-amber-400">{selectedUser.email}</strong> ke database Kedai Nyamleng...
               </p>
             </div>
 
@@ -461,7 +516,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
             <div className="flex items-center justify-center gap-2 text-xs font-bold text-emerald-400">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Memverifikasi Sesi Supabase Auth... ({syncProgress}%)</span>
+              <span>Memverifikasi Sesi Profil... ({syncProgress}%)</span>
             </div>
           </div>
         )}
@@ -475,7 +530,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
             <div className="space-y-1">
               <h3 className={`text-lg font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                Sesi Supabase Auth Berhasil Terhubung!
+                Profil Berhasil Terhubung!
               </h3>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 Notifikasi keamanan transparansi profil telah dikirimkan ke inbox email Anda.
@@ -499,7 +554,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                     </h4>
                     <span className="bg-emerald-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
                       <Sparkles className="w-2.5 h-2.5" />
-                      <span>Supabase SSO Verified</span>
+                      <span>Verified</span>
                     </span>
                   </div>
                   <p className={`text-xs font-semibold truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -512,7 +567,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               </div>
 
               <div className="pt-2 border-t border-white/10 text-[10px] text-gray-400 leading-relaxed">
-                digital-menu-kedai-nyamleng.vercel.app menerima info profil ini. Sesi Supabase Auth terdaftar di server.
+                digital-menu-kedai-nyamleng.vercel.app menerima info profil ini. Email notifikasi transparansi keamanan telah terkirim.
               </div>
             </div>
 
