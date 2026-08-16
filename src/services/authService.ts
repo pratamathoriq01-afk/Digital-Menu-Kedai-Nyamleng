@@ -185,8 +185,8 @@ export const getSupabaseUserClaims = async () => {
       user_metadata: user.user_metadata,
     };
     return { data: claims, error: null };
-  } catch (err) {
-    return { data: null, error: err };
+  } catch (err: any) {
+    return { data: null, error: err?.message || err };
   }
 };
 
