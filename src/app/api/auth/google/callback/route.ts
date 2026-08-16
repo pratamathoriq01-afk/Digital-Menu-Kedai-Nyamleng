@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleTokensFromCode, parseGoogleOAuthError, oauth2Client, checkGrantedOAuthScopes } from '@/lib/googleOAuth';
+import { 
+  getGoogleTokensFromCode, 
+  parseGoogleOAuthError, 
+  oauth2Client, 
+  checkGrantedOAuthScopes,
+  fetchGoogleDriveFiles,
+  fetchGoogleCalendarEvents 
+} from '@/lib/googleOAuth';
 import { google } from 'googleapis';
 import { syncCustomerToSupabase, createQuickDeviceUser } from '@/services/authService';
 
@@ -39,9 +46,31 @@ export async function GET(req: NextRequest) {
       tokens = await getGoogleTokensFromCode(code);
       console.log('[Google OAuth Callback] Tokens exchange successful. Access Token:', !!tokens.access_token);
       
-      // 5. Check which scopes were granted by the user
+      // 5. Check which scopes were granted by the user (Drive / Calendar / Profile)
       const grantedScopes = checkGrantedOAuthScopes(tokens);
       console.log('[Google OAuth Granted Scopes Check]:', grantedScopes);
+
+      // Check Drive Readonly permission
+      if (grantedScopes.hasDriveReadonly) {
+        console.log('[Drive Scope Granted]: Listing files...');
+        try {
+          const driveFiles = await fetchGoogleDriveFiles();
+          console.log(`[Drive Files Count]: ${driveFiles.length} file(s) found.`);
+        } catch (driveErr) {
+          console.warn('[Drive API Fetch Notice]:', driveErr);
+        }
+      }
+
+      // Check Calendar Readonly permission
+      if (grantedScopes.hasCalendarReadonly) {
+        console.log('[Calendar Scope Granted]: Fetching upcoming events...');
+        try {
+          const calendarEvents = await fetchGoogleCalendarEvents();
+          console.log(`[Calendar Events Count]: ${calendarEvents.length} event(s) found.`);
+        } catch (calErr) {
+          console.warn('[Calendar API Fetch Notice]:', calErr);
+        }
+      }
     } catch (exchangeErr: any) {
       const googleErrCode = exchangeErr?.response?.data?.error || exchangeErr?.message || 'invalid_grant';
       console.error('[Google OAuth Token Exchange Error]:', googleErrCode);

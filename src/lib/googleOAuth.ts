@@ -6,6 +6,9 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '8992744961
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const REDIRECT_URI = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || 'https://digital-menu-kedai-nyamleng.vercel.app/api/auth/google/callback';
 
+/**
+ * 1. Initialize Google OAuth2 Client
+ */
 export const oauth2Client = new OAuth2Client(
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
@@ -25,63 +28,20 @@ oauth2Client.on('tokens', async (tokens: Credentials) => {
 export const defaultScopes = [
   'https://www.googleapis.com/auth/userinfo.profile',
   'https://www.googleapis.com/auth/userinfo.email',
-  'openid'
+  'openid',
+  'https://www.googleapis.com/auth/drive.metadata.readonly',
+  'https://www.googleapis.com/auth/calendar.readonly'
 ];
 
 /**
- * Call Google UserInfo API on behalf of the authorized user account
- */
-export const fetchGoogleUserProfile = async (client?: OAuth2Client) => {
-  const oauth2 = google.oauth2({ version: 'v2', auth: client || oauth2Client });
-  const response = await oauth2.userinfo.get();
-  return response.data;
-};
-
-/**
- * Example of calling Google Drive API to list filenames in user's Drive using authorized oauth2Client
- */
-export const fetchGoogleDriveFiles = async (client?: OAuth2Client, pageSize: number = 10) => {
-  const drive = google.drive({ version: 'v3', auth: client || oauth2Client });
-  const response = await drive.files.list({
-    pageSize,
-    fields: 'nextPageToken, files(id, name)',
-  });
-  return response.data.files || [];
-};
-
-/**
- * Check if a specific scope has been granted in tokens.scope
- */
-export const hasGrantedScope = (grantedScopes: string | string[] | undefined, targetScope: string): boolean => {
-  if (!grantedScopes) return false;
-  if (Array.isArray(grantedScopes)) {
-    return grantedScopes.includes(targetScope);
-  }
-  return grantedScopes.split(' ').includes(targetScope);
-};
-
-/**
- * Verify granted scopes for profile and email
- */
-export const checkGrantedOAuthScopes = (tokens: Credentials) => {
-  const scopeStr = tokens.scope || '';
-  return {
-    hasProfile: hasGrantedScope(scopeStr, 'https://www.googleapis.com/auth/userinfo.profile'),
-    hasEmail: hasGrantedScope(scopeStr, 'https://www.googleapis.com/auth/userinfo.email'),
-    hasOpenId: hasGrantedScope(scopeStr, 'openid'),
-    rawScopes: scopeStr
-  };
-};
-
-/**
- * Generate a secure 32-byte hex random state string to mitigate CSRF attacks
+ * 2. Generate a secure 32-byte hex random state string to mitigate CSRF attacks (replaces req.session.state)
  */
 export const generateOAuthState = (): string => {
   return crypto.randomBytes(32).toString('hex');
 };
 
 /**
- * Generate Google OAuth Authorization URL with offline access, incremental scopes, and CSRF state token
+ * 3. Generate Google OAuth Authorization URL with offline access, incremental scopes, and CSRF state token
  */
 export const generateGoogleAuthorizationUrl = (customScopes?: string[], state?: string) => {
   const oauthState = state || generateOAuthState();
@@ -95,6 +55,9 @@ export const generateGoogleAuthorizationUrl = (customScopes?: string[], state?: 
   });
 };
 
+/**
+ * 4. Token Exchange Helper (code -> tokens)
+ */
 export const getGoogleTokensFromCode = async (code: string) => {
   const { tokens } = await oauth2Client.getToken(code);
   oauth2Client.setCredentials(tokens);
@@ -106,7 +69,68 @@ export const setGoogleCredentials = (credentials: Credentials) => {
 };
 
 /**
- * Revoke a Google OAuth 2.0 Access Token / Refresh Token
+ * 5. Call Google UserInfo API on behalf of the authorized user account
+ */
+export const fetchGoogleUserProfile = async (client?: OAuth2Client) => {
+  const oauth2 = google.oauth2({ version: 'v2', auth: client || oauth2Client });
+  const response = await oauth2.userinfo.get();
+  return response.data;
+};
+
+/**
+ * 6. Call Google Drive API (drive.metadata.readonly)
+ */
+export const fetchGoogleDriveFiles = async (client?: OAuth2Client, pageSize: number = 10) => {
+  const drive = google.drive({ version: 'v3', auth: client || oauth2Client });
+  const response = await drive.files.list({
+    pageSize,
+    fields: 'nextPageToken, files(id, name)',
+  });
+  return response.data.files || [];
+};
+
+/**
+ * 7. Call Google Calendar API (calendar.readonly)
+ */
+export const fetchGoogleCalendarEvents = async (client?: OAuth2Client, maxResults: number = 10) => {
+  const calendar = google.calendar({ version: 'v3', auth: client || oauth2Client });
+  const response = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: new Date().toISOString(),
+    maxResults,
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+  return response.data.items || [];
+};
+
+/**
+ * 8. Check if a specific scope has been granted in tokens.scope
+ */
+export const hasGrantedScope = (grantedScopes: string | string[] | undefined, targetScope: string): boolean => {
+  if (!grantedScopes) return false;
+  if (Array.isArray(grantedScopes)) {
+    return grantedScopes.includes(targetScope);
+  }
+  return grantedScopes.split(' ').includes(targetScope);
+};
+
+/**
+ * 9. Verify granted scopes for profile, email, Drive, and Calendar
+ */
+export const checkGrantedOAuthScopes = (tokens: Credentials) => {
+  const scopeStr = tokens.scope || '';
+  return {
+    hasProfile: hasGrantedScope(scopeStr, 'https://www.googleapis.com/auth/userinfo.profile'),
+    hasEmail: hasGrantedScope(scopeStr, 'https://www.googleapis.com/auth/userinfo.email'),
+    hasDriveReadonly: hasGrantedScope(scopeStr, 'https://www.googleapis.com/auth/drive.metadata.readonly'),
+    hasCalendarReadonly: hasGrantedScope(scopeStr, 'https://www.googleapis.com/auth/calendar.readonly'),
+    rawScopes: scopeStr
+  };
+};
+
+/**
+ * 10. Revoke a Google OAuth 2.0 Access Token / Refresh Token (POST https://oauth2.googleapis.com/revoke)
  */
 export const revokeGoogleToken = async (token: string) => {
   try {
