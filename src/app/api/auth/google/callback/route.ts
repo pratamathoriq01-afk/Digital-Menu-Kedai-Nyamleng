@@ -8,13 +8,22 @@ import {
 } from '@/lib/googleOAuth';
 import { google } from 'googleapis';
 import { syncCustomerToSupabase, createQuickDeviceUser } from '@/services/authService';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://pqebwoigkmeothadtzjr.supabase.co';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxZWJ3b2lna21lb3RoYWR0empyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNjc4ODUsImV4cCI6MjEwMTY0Mzg4NX0.Bjgaby4hZRaYDywwaD0vRQR1pNyTbU6jPsd5FqZte24';
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+export async function GET(request: NextRequest) {
+  const host = request.headers.get('host') || 'localhost:3000';
+  const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
+  const origin = `${protocol}://${host}`;
+
   try {
-    const origin = req.headers.get('origin') || new URL(req.url).origin;
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
     const error = searchParams.get('error');
     const state = searchParams.get('state');
@@ -25,7 +34,7 @@ export async function GET(req: NextRequest) {
       const diagnostic = parseGoogleOAuthError(error);
       console.warn('[Google OAuth Error Diagnostic]:', diagnostic);
       
-      return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(error)}`, req.url));
+      return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(error)}`, origin));
     }
 
     // 2. CSRF State Verification
@@ -35,10 +44,10 @@ export async function GET(req: NextRequest) {
 
     // 3. Validate missing authorization code
     if (!code) {
-      return NextResponse.json({ error: 'Missing authorization code' }, { status: 400 });
+      return NextResponse.json({ error: 'Auth code tidak ditemukan' }, { status: 400 });
     }
 
-    // 4. Exchange code for access & refresh tokens (access_type=offline) with dynamic origin client
+    // 4. Tukar code dengan token Google menggunakan dynamic origin
     console.log('[Google OAuth Callback] Exchanging code for tokens with origin:', origin);
     
     let tokens;
@@ -49,13 +58,11 @@ export async function GET(req: NextRequest) {
       client = res.client;
       console.log('[Google OAuth Callback] Tokens exchange successful. Access Token:', !!tokens.access_token);
       
-      // 5. Check which scopes were granted by the user (Drive / Calendar / Profile)
+      // Check granted scopes (Drive / Calendar)
       const grantedScopes = checkGrantedOAuthScopes(tokens);
       console.log('[Google OAuth Granted Scopes Check]:', grantedScopes);
 
-      // Check Drive Readonly permission
       if (grantedScopes.hasDriveReadonly) {
-        console.log('[Drive Scope Granted]: Listing files...');
         try {
           const driveFiles = await fetchGoogleDriveFiles(client);
           console.log(`[Drive Files Count]: ${driveFiles.length} file(s) found.`);
@@ -64,9 +71,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Check Calendar Readonly permission
       if (grantedScopes.hasCalendarReadonly) {
-        console.log('[Calendar Scope Granted]: Fetching upcoming events...');
         try {
           const calendarEvents = await fetchGoogleCalendarEvents(client);
           console.log(`[Calendar Events Count]: ${calendarEvents.length} event(s) found.`);
@@ -81,23 +86,44 @@ export async function GET(req: NextRequest) {
       const diagnostic = parseGoogleOAuthError(googleErrCode.includes('invalid_grant') ? 'invalid_grant' : googleErrCode);
       console.error('[Token Exchange Error Diagnostic]:', diagnostic);
 
-      return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(diagnostic.code)}`, req.url));
+      return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(diagnostic.code)}`, origin));
     }
 
-    // 6. Fetch Google User Profile info (name, email, picture) using googleapis userinfo
+    // 5. Ambil data profil pelanggan dari Google UserInfo API
     try {
-      const oauth2 = google.oauth2({ version: 'v2', auth: client as any });
-      const { data: googleProfile } = await oauth2.userinfo.get();
-      
-      if (googleProfile && googleProfile.email) {
-        console.log('[Google Profile Fetched Successfully]:', googleProfile.email);
+      const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      const googleUser = await userInfoResponse.json();
+
+      if (googleUser && googleUser.email) {
+        console.log('[Google Profile Fetched Successfully]:', googleUser.email);
+        
+        // Try creating official Supabase Auth user via admin if service role key available
+        try {
+          if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            await supabaseAdmin.auth.admin.createUser({
+              email: googleUser.email,
+              email_confirm: true,
+              user_metadata: { 
+                full_name: googleUser.name || googleUser.given_name || googleUser.email.split('@')[0], 
+                avatar_url: googleUser.picture,
+                role: 'customer'
+              }
+            });
+          }
+        } catch (adminErr: any) {
+          console.log('[Supabase Admin User Create Notice]:', adminErr?.message || adminErr);
+        }
+
+        // Sinkronisasikan profil pemesan ke database Customer Supabase PostgreSQL
         const customer = createQuickDeviceUser(
-          googleProfile.email,
-          googleProfile.name || googleProfile.given_name || undefined,
+          googleUser.email,
+          googleUser.name || googleUser.given_name || undefined,
           'GOOGLE'
         );
-        if (googleProfile.picture) {
-          customer.avatarUrl = googleProfile.picture;
+        if (googleUser.picture) {
+          customer.avatarUrl = googleUser.picture;
         }
 
         await syncCustomerToSupabase(customer);
@@ -106,9 +132,10 @@ export async function GET(req: NextRequest) {
       console.warn('[Google UserInfo Fetch Notice]:', profileErr);
     }
 
-    return NextResponse.redirect(new URL('/?login_success=true', req.url));
+    // 6. Lempar kembali pembeli ke halaman utama katalog digital menu
+    return NextResponse.redirect(new URL('/?login_success=true', origin));
   } catch (err: any) {
-    console.error('[Google OAuth Callback Exception]:', err);
-    return NextResponse.redirect(new URL('/?auth_error=exception', req.url));
+    console.error('Eror autentikasi custom server:', err);
+    return NextResponse.redirect(new URL('/?auth_error=exception', request.url));
   }
 }
