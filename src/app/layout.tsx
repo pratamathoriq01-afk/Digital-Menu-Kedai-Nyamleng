@@ -21,6 +21,9 @@ export const metadata: Metadata = {
   description: 'Aplikasi Menu Digital Resmi Kedai Nyamleng Malang. Pesan kuliner khas lezat, nikmati voucher diskon promo, dan lacak status pesanan dapur secara realtime.',
   keywords: ['Kedai Nyamleng', 'Kuliner Malang', 'Menu Digital', 'Pesan Makan Online Malang', 'QRIS Statis'],
   authors: [{ name: 'Kedai Nyamleng Team' }],
+  verification: {
+    google: 'nqoF14-CdsVQa3MiJQ24c8PtYtVi4Jl4883cUcZvfsM',
+  },
   openGraph: {
     title: 'Kedai Nyamleng Malang - Menu Digital & Pemesanan Instan',
     description: 'Pesan makanan & minuman khas Kedai Nyamleng Malang dengan mudah untuk Takeaway & Delivery.',
