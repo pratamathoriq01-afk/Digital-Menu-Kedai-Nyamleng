@@ -45,9 +45,7 @@ oauth2Client.on('tokens', async (tokens: Credentials) => {
 export const defaultScopes = [
   'https://www.googleapis.com/auth/userinfo.profile',
   'https://www.googleapis.com/auth/userinfo.email',
-  'openid',
-  'https://www.googleapis.com/auth/drive.metadata.readonly',
-  'https://www.googleapis.com/auth/calendar.readonly'
+  'openid'
 ];
 
 /**
