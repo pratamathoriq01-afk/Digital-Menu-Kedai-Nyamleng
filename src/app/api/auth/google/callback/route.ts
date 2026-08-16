@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleTokensFromCode, parseGoogleOAuthError } from '@/lib/googleOAuth';
+import { getGoogleTokensFromCode, parseGoogleOAuthError, oauth2Client } from '@/lib/googleOAuth';
+import { google } from 'googleapis';
+import { syncCustomerToSupabase, createQuickDeviceUser } from '@/services/authService';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +16,6 @@ export async function GET(req: NextRequest) {
       const diagnostic = parseGoogleOAuthError(error);
       console.warn('[Google OAuth Error Diagnostic]:', diagnostic);
       
-      // Redirect back to main page with specific auth_error parameter
       return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(error)}`, req.url));
     }
 
@@ -22,9 +23,31 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing authorization code' }, { status: 400 });
     }
 
-    console.log('[Google OAuth Callback] Exchanging code for tokens...');
+    console.log('[Google OAuth Callback] Exchanging code for tokens:', code);
     const tokens = await getGoogleTokensFromCode(code);
-    console.log('[Google OAuth Callback] Tokens exchange successful:', { access_token: !!tokens.access_token, refresh_token: !!tokens.refresh_token });
+    console.log('[Google OAuth Callback] Tokens exchange successful. Access Token:', !!tokens.access_token);
+
+    // Fetch Google User Profile info (name, email, picture) using googleapis userinfo
+    try {
+      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const { data: googleProfile } = await oauth2.userinfo.get();
+      
+      if (googleProfile && googleProfile.email) {
+        console.log('[Google Profile Fetched Successfully]:', googleProfile.email);
+        const customer = createQuickDeviceUser(
+          googleProfile.email,
+          googleProfile.name || googleProfile.given_name || undefined,
+          'GOOGLE'
+        );
+        if (googleProfile.picture) {
+          customer.avatarUrl = googleProfile.picture;
+        }
+
+        await syncCustomerToSupabase(customer);
+      }
+    } catch (profileErr) {
+      console.warn('[Google UserInfo Fetch Notice]:', profileErr);
+    }
 
     return NextResponse.redirect(new URL('/?login_success=true', req.url));
   } catch (err: any) {
