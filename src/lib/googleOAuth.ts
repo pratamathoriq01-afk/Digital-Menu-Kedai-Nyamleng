@@ -2,35 +2,35 @@ import { OAuth2Client, Credentials } from 'google-auth-library';
 import { google } from 'googleapis';
 import crypto from 'crypto';
 
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '899274496131-nvvt5soqunfe5v1a08t5p9r3fha4g1qq.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '899274496131-nvvt5soqunfe5v1a08t5p9r3fha4g1qq.apps.googleusercontent.com';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 
 /**
- * 1. Helper function to compute precise dynamic Redirect URI for Localhost (3000/3001/etc) or Production Vercel
+ * Mendapatkan instance OAuth2Client secara dinamis berdasarkan domain asal (origin)
+ * @param origin - Contoh: 'http://localhost:3000' atau 'https://digital-menu-kedai-nyamleng.vercel.app'
  */
-export const getGoogleRedirectUri = (origin?: string): string => {
-  if (origin && origin.startsWith('http://localhost')) {
-    return `${origin}/api/auth/google/callback`;
-  }
-  if (origin && origin.startsWith('http://127.0.0.1')) {
-    return `${origin}/api/auth/google/callback`;
-  }
-  return process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || 'https://digital-menu-kedai-nyamleng.vercel.app/api/auth/google/callback';
+export const getGoogleOAuthClient = (origin?: string): OAuth2Client => {
+  const defaultOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://digital-menu-kedai-nyamleng.vercel.app';
+  const targetOrigin = origin || defaultOrigin;
+  
+  // Bersihkan trailing slash jika ada agar formatnya konsisten
+  const cleanOrigin = targetOrigin.replace(/\/$/, '');
+  
+  // Gabungkan origin dengan path API callback default Anda
+  const dynamicRedirectUri = `${cleanOrigin}/api/auth/google/callback`;
+
+  return new OAuth2Client({
+    clientId: GOOGLE_CLIENT_ID,
+    clientSecret: GOOGLE_CLIENT_SECRET,
+    redirectUri: dynamicRedirectUri, // Terbentuk otomatis secara dinamis
+  });
 };
 
-/**
- * 2. Helper factory to create OAuth2Client dynamically per request origin
- */
 export const createOAuth2Client = (origin?: string): OAuth2Client => {
-  const redirectUri = getGoogleRedirectUri(origin);
-  return new OAuth2Client(
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    redirectUri
-  );
+  return getGoogleOAuthClient(origin);
 };
 
-export const oauth2Client = createOAuth2Client();
+export const oauth2Client = getGoogleOAuthClient();
 
 // Automatic Token Refresh Listener
 oauth2Client.on('tokens', async (tokens: Credentials) => {
@@ -51,73 +51,37 @@ export const defaultScopes = [
 ];
 
 /**
- * 3. Validate Redirect URI according to Google OAuth 2.0 Security Rules
+ * Menghasilkan URL Autentikasi Google secara dinamis
+ * @param origin - Domain tempat user mengeklik tombol login
  */
-export const validateGoogleRedirectUri = (uri: string): { isValid: boolean; reason?: string } => {
-  try {
-    const parsed = new URL(uri);
+export const generateDynamicAuthUrl = (origin?: string, state?: string, loginHint?: string): string => {
+  const client = getGoogleOAuthClient(origin);
+  const oauthState = state || generateOAuthState();
 
-    // Rule 1: Scheme must be HTTPS (localhost exempted)
-    const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
-    if (parsed.protocol !== 'https:' && !isLocalhost) {
-      return { isValid: false, reason: 'Redirect URI must use the HTTPS scheme, not plain HTTP.' };
-    }
+  const options: any = {
+    access_type: 'offline', // Meminta refresh token
+    prompt: 'select_account',
+    include_granted_scopes: true,
+    state: oauthState,
+    enable_granular_consent: true,
+    scope: defaultScopes,
+  };
 
-    // Rule 2: Host cannot be raw IP address (localhost exempted)
-    const isRawIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(parsed.hostname);
-    if (isRawIp && !isLocalhost) {
-      return { isValid: false, reason: 'Hosts cannot be raw IP addresses (except localhost).' };
-    }
-
-    // Rule 3: Host domain cannot be googleusercontent.com
-    if (parsed.hostname.endsWith('googleusercontent.com')) {
-      return { isValid: false, reason: 'Host domains cannot be googleusercontent.com.' };
-    }
-
-    // Rule 4: Cannot contain userinfo (username:password@host)
-    if (parsed.username || parsed.password) {
-      return { isValid: false, reason: 'Redirect URIs cannot contain userinfo subcomponents.' };
-    }
-
-    // Rule 5: Cannot contain path traversal (/.. or \..)
-    if (parsed.pathname.includes('/..') || parsed.pathname.includes('\\..')) {
-      return { isValid: false, reason: 'Redirect URIs cannot contain path traversal (/.. or \\..).' };
-    }
-
-    // Rule 6: Cannot contain hash fragments
-    if (parsed.hash) {
-      return { isValid: false, reason: 'Redirect URIs cannot contain fragment components (#).' };
-    }
-
-    // Rule 7: Cannot contain wildcards (*) or null characters
-    if (uri.includes('*') || uri.includes('%00') || uri.includes('\0')) {
-      return { isValid: false, reason: 'Redirect URIs cannot contain wildcard or null characters.' };
-    }
-
-    return { isValid: true };
-  } catch {
-    return { isValid: false, reason: 'Invalid URL formatting.' };
+  if (loginHint) {
+    options.login_hint = loginHint;
   }
+
+  return client.generateAuthUrl(options);
 };
 
-/**
- * 4. Generate a secure 32-byte hex random state string to mitigate CSRF attacks
- */
-export const generateOAuthState = (): string => {
-  return crypto.randomBytes(32).toString('hex');
-};
-
-/**
- * 5. Generate Google OAuth Authorization URL with offline access, incremental scopes, CSRF state token, and optional origin & login_hint
- */
 export const generateGoogleAuthorizationUrl = (
   customScopes?: string[], 
   state?: string, 
   loginHint?: string,
   origin?: string
 ) => {
+  const client = getGoogleOAuthClient(origin);
   const oauthState = state || generateOAuthState();
-  const client = createOAuth2Client(origin);
 
   const options: any = {
     access_type: 'offline',
@@ -136,7 +100,57 @@ export const generateGoogleAuthorizationUrl = (
 };
 
 /**
- * 6. Incremental Authorization Helper: Requests additional scopes dynamically while preserving combined permissions
+ * Validate Redirect URI according to Google OAuth 2.0 Security Rules
+ */
+export const validateGoogleRedirectUri = (uri: string): { isValid: boolean; reason?: string } => {
+  try {
+    const parsed = new URL(uri);
+
+    const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+    if (parsed.protocol !== 'https:' && !isLocalhost) {
+      return { isValid: false, reason: 'Redirect URI must use the HTTPS scheme, not plain HTTP.' };
+    }
+
+    const isRawIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(parsed.hostname);
+    if (isRawIp && !isLocalhost) {
+      return { isValid: false, reason: 'Hosts cannot be raw IP addresses (except localhost).' };
+    }
+
+    if (parsed.hostname.endsWith('googleusercontent.com')) {
+      return { isValid: false, reason: 'Host domains cannot be googleusercontent.com.' };
+    }
+
+    if (parsed.username || parsed.password) {
+      return { isValid: false, reason: 'Redirect URIs cannot contain userinfo subcomponents.' };
+    }
+
+    if (parsed.pathname.includes('/..') || parsed.pathname.includes('\\..')) {
+      return { isValid: false, reason: 'Redirect URIs cannot contain path traversal (/.. or \\..).' };
+    }
+
+    if (parsed.hash) {
+      return { isValid: false, reason: 'Redirect URIs cannot contain fragment components (#).' };
+    }
+
+    if (uri.includes('*') || uri.includes('%00') || uri.includes('\0')) {
+      return { isValid: false, reason: 'Redirect URIs cannot contain wildcard or null characters.' };
+    }
+
+    return { isValid: true };
+  } catch {
+    return { isValid: false, reason: 'Invalid URL formatting.' };
+  }
+};
+
+/**
+ * Generate a secure 32-byte hex random state string to mitigate CSRF attacks
+ */
+export const generateOAuthState = (): string => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+/**
+ * Incremental Authorization Helper: Requests additional scopes dynamically while preserving combined permissions
  */
 export const generateIncrementalAuthUrl = (additionalScopes: string[], state?: string, loginHint?: string, origin?: string) => {
   const combinedScopes = Array.from(new Set([...defaultScopes, ...additionalScopes]));
@@ -144,10 +158,10 @@ export const generateIncrementalAuthUrl = (additionalScopes: string[], state?: s
 };
 
 /**
- * 7. Token Exchange Helper (code -> tokens) with dynamic origin client
+ * Token Exchange Helper (code -> tokens) with dynamic origin client
  */
 export const getGoogleTokensFromCode = async (code: string, origin?: string) => {
-  const client = createOAuth2Client(origin);
+  const client = getGoogleOAuthClient(origin);
   const { tokens } = await client.getToken(code);
   client.setCredentials(tokens);
   return { tokens, client };
@@ -159,7 +173,7 @@ export const setGoogleCredentials = (credentials: Credentials, client?: OAuth2Cl
 };
 
 /**
- * 8. Call Google UserInfo API on behalf of the authorized user account
+ * Call Google UserInfo API on behalf of the authorized user account
  */
 export const fetchGoogleUserProfile = async (client?: OAuth2Client) => {
   const oauth2 = google.oauth2({ version: 'v2', auth: (client || oauth2Client) as any });
@@ -168,7 +182,7 @@ export const fetchGoogleUserProfile = async (client?: OAuth2Client) => {
 };
 
 /**
- * 9. Call Google Drive API (drive.metadata.readonly)
+ * Call Google Drive API (drive.metadata.readonly)
  */
 export const fetchGoogleDriveFiles = async (client?: OAuth2Client, pageSize: number = 10) => {
   const drive = google.drive({ version: 'v3', auth: (client || oauth2Client) as any });
@@ -180,7 +194,7 @@ export const fetchGoogleDriveFiles = async (client?: OAuth2Client, pageSize: num
 };
 
 /**
- * 10. Call Google Calendar API (calendar.readonly)
+ * Call Google Calendar API (calendar.readonly)
  */
 export const fetchGoogleCalendarEvents = async (client?: OAuth2Client, maxResults: number = 10) => {
   const calendar = google.calendar({ version: 'v3', auth: (client || oauth2Client) as any });
@@ -195,7 +209,7 @@ export const fetchGoogleCalendarEvents = async (client?: OAuth2Client, maxResult
 };
 
 /**
- * 11. Check if a specific scope has been granted in tokens.scope
+ * Check if a specific scope has been granted in tokens.scope
  */
 export const hasGrantedScope = (grantedScopes: string | string[] | undefined, targetScope: string): boolean => {
   if (!grantedScopes) return false;
@@ -206,7 +220,7 @@ export const hasGrantedScope = (grantedScopes: string | string[] | undefined, ta
 };
 
 /**
- * 12. Verify granted scopes for profile, email, Drive, and Calendar
+ * Verify granted scopes for profile, email, Drive, and Calendar
  */
 export const checkGrantedOAuthScopes = (tokens: Credentials) => {
   const scopeStr = tokens.scope || '';
@@ -220,7 +234,7 @@ export const checkGrantedOAuthScopes = (tokens: Credentials) => {
 };
 
 /**
- * 13. Revoke a Google OAuth 2.0 Access Token / Refresh Token (POST https://oauth2.googleapis.com/revoke)
+ * Revoke a Google OAuth 2.0 Access Token / Refresh Token (POST https://oauth2.googleapis.com/revoke)
  */
 export const revokeGoogleToken = async (token: string) => {
   try {
