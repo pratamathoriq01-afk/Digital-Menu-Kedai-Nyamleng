@@ -21,8 +21,9 @@ import { OrderStatusModal } from '@/components/OrderStatusModal';
 import { GoogleLoginModal } from '@/components/GoogleLoginModal';
 import { OrderHistoryDrawer } from '@/components/OrderHistoryDrawer';
 import { useCartStore } from '@/store/useCartStore';
-import { CustomerUser, getStoredCustomerUser, setStoredCustomerUser } from '@/services/authService';
+import { CustomerUser, getStoredCustomerUser, setStoredCustomerUser, syncCustomerToSupabase, handleSupabaseLogout } from '@/services/authService';
 import { MenuItem } from '@/types/pos';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function Home() {
   const {
@@ -59,6 +60,34 @@ export default function Home() {
     } else {
       setIsGoogleLoginOpen(true);
     }
+
+    // Realtime Supabase Auth SSO State Listener
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Supabase Auth Event Listener]:', event, session);
+      if (session?.user) {
+        const u = session.user;
+        const ssoUser: CustomerUser = {
+          id: u.id,
+          googleId: u.user_metadata?.sub || u.id,
+          name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'Pelanggan Kedai',
+          email: u.email || '',
+          phone: u.user_metadata?.phone || '085113661387',
+          avatarUrl: u.user_metadata?.avatar_url || u.user_metadata?.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.email || 'user')}`,
+          provider: 'GOOGLE',
+        };
+
+        const synced = await syncCustomerToSupabase(ssoUser);
+        setCurrentUser(synced);
+        setIsGoogleLoginOpen(false);
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setIsGoogleLoginOpen(true);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, [fetchMenuItems]);
 
   const handleLoginSuccess = (user: CustomerUser) => {
@@ -66,7 +95,8 @@ export default function Home() {
     setIsGoogleLoginOpen(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await handleSupabaseLogout();
     setStoredCustomerUser(null);
     setCurrentUser(null);
     setIsSidebarDrawerOpen(false);
@@ -112,6 +142,8 @@ export default function Home() {
       <Header 
         onOpenSidebarDrawer={() => setIsSidebarDrawerOpen(true)}
         currentUser={currentUser}
+        onLogoutSuccess={handleLogout}
+        onOpenLoginModal={() => setIsGoogleLoginOpen(true)}
       />
 
       {/* Main Container */}

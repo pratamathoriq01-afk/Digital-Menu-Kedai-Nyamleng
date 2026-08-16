@@ -112,6 +112,36 @@ export const syncCustomerToSupabase = async (user: CustomerUser): Promise<Custom
   }
 };
 
+export const signInWithGoogleSSO = async () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) console.warn('[Supabase Auth Google SSO Notice]:', error.message);
+    return data;
+  } catch (e) {
+    console.error('[Supabase Auth Google Exception]:', e);
+  }
+};
+
+export const handleSupabaseLogout = async (): Promise<void> => {
+  if (typeof window === 'undefined') return;
+  try {
+    // 1. Official Supabase Auth engine sign out
+    await supabase.auth.signOut();
+  } catch (e) {
+    console.warn('[Supabase SignOut Notice]:', e);
+  } finally {
+    // 2. Remove session & stored customer user from LocalStorage
+    localStorage.removeItem(CUSTOMER_AUTH_KEY);
+    console.log('[Supabase Logout] Session cleared successfully.');
+  }
+};
+
 export const createQuickDeviceUser = (
   email: string, 
   name?: string, 

@@ -5,7 +5,7 @@ import { Search, ShoppingBag, Bike, Clock, MapPin, Sparkles, Star, ShieldCheck, 
 import { useCartStore } from '@/store/useCartStore';
 import { OrderType, STORE_LOCATION } from '@/types/pos';
 import { Logo } from './Logo';
-import { CustomerUser, setStoredCustomerUser } from '@/services/authService';
+import { CustomerUser, handleSupabaseLogout } from '@/services/authService';
 
 interface HeaderProps {
   onOpenSidebarDrawer?: () => void;
@@ -30,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [timeString, setTimeString] = useState<string>('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isConfirmLogoutOpen, setIsConfirmLogoutOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     const updateClock = () => {
@@ -59,8 +60,10 @@ export const Header: React.FC<HeaderProps> = ({
     setOrderType(type);
   };
 
-  const handleConfirmLogoutExecution = () => {
-    setStoredCustomerUser(null);
+  const handleConfirmLogoutExecution = async () => {
+    setIsLoggingOut(true);
+    await handleSupabaseLogout();
+    setIsLoggingOut(false);
     setIsConfirmLogoutOpen(false);
     setIsProfileModalOpen(false);
     if (onLogoutSuccess) onLogoutSuccess();
@@ -270,18 +273,20 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex gap-2.5 pt-2">
               <button
                 type="button"
+                disabled={isLoggingOut}
                 onClick={() => setIsConfirmLogoutOpen(false)}
-                className="flex-1 py-3 px-4 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-2xl transition-all cursor-pointer"
+                className="flex-1 py-3 px-4 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-2xl transition-all cursor-pointer disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={isLoggingOut}
                 onClick={handleConfirmLogoutExecution}
-                className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-2xl shadow-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98"
+                className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-2xl shadow-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Ya, Keluar Akun</span>
+                <span>{isLoggingOut ? 'Mengakhiri Sesi...' : 'Ya, Keluar Akun'}</span>
               </button>
             </div>
           </div>
