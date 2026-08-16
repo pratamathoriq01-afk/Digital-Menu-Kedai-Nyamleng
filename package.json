@@ -12,6 +12,7 @@
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.112.3",
     "clsx": "^2.1.1",
+    "google-auth-library": "^11.0.2",
     "lucide-react": "^0.435.0",
     "mcp-remote": "^0.1.38",
     "next": "^14.2.5",
