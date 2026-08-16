@@ -33,13 +33,17 @@ export const setStoredCustomerUser = (user: CustomerUser | null): void => {
 
 export const syncCustomerToSupabase = async (user: CustomerUser): Promise<CustomerUser> => {
   try {
+    const cleanEmail = user.email.trim().toLowerCase();
+    
+    // Check existing customer record in Supabase PostgreSQL DB
     const { data: existing } = await supabase
       .from('Customer')
       .select('*')
-      .eq('email', user.email)
+      .eq('email', cleanEmail)
       .maybeSingle();
 
     if (existing) {
+      console.log('[Supabase Sync] Existing Customer Profile Found:', existing);
       setStoredCustomerUser(existing);
       return existing;
     }
@@ -47,10 +51,10 @@ export const syncCustomerToSupabase = async (user: CustomerUser): Promise<Custom
     const newCustomer = {
       id: user.id || `cust-${Date.now()}`,
       googleId: user.googleId || `g-${Date.now()}`,
-      name: user.name,
-      email: user.email,
-      phone: user.phone || '',
-      avatarUrl: user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.email)}`,
+      name: user.name || cleanEmail.split('@')[0].replace(/[._-]/g, ' '),
+      email: cleanEmail,
+      phone: user.phone || '085113661387',
+      avatarUrl: user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanEmail)}`,
       createdAt: new Date().toISOString(),
     };
 
@@ -66,6 +70,7 @@ export const syncCustomerToSupabase = async (user: CustomerUser): Promise<Custom
       return newCustomer;
     }
 
+    console.log('[Supabase Sync] New Customer Profile Created:', data);
     setStoredCustomerUser(data);
     return data;
   } catch (err) {
@@ -73,4 +78,38 @@ export const syncCustomerToSupabase = async (user: CustomerUser): Promise<Custom
     setStoredCustomerUser(user);
     return user;
   }
+};
+
+export const signInWithGoogleOAuth = async () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) console.warn('[Supabase Auth Google OAuth Notice]:', error.message);
+    return data;
+  } catch (e) {
+    console.error('[Supabase Auth Google Exception]:', e);
+  }
+};
+
+export const createQuickDeviceUser = (email: string, name?: string): CustomerUser => {
+  const cleanEmail = email.trim().toLowerCase();
+  const formatName = name?.trim() || cleanEmail.split('@')[0].replace(/[._-]/g, ' ');
+  const capitalizedName = formatName
+    .split(' ')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+
+  return {
+    id: `google-${Date.now()}`,
+    googleId: `g-${Date.now()}`,
+    name: capitalizedName,
+    email: cleanEmail,
+    phone: '085113661387',
+    avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanEmail)}`,
+  };
 };
