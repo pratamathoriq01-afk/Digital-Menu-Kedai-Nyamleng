@@ -69,7 +69,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Seamless 2-Second Processing & Security Consent Dispatch Flow
+  // Seamless 2-Second Processing & Security Consent Dispatch Flow (Zero Form Interruption)
   const handleExecuteOneTapAccountSync = async (account: CustomerUser) => {
     setSelectedUser(account);
     setModalStep('SYNCING_PROCESSING');
@@ -115,35 +115,31 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   };
 
-  // Direct 1-Tap Trigger for Continue with Google (Eliminates Supabase 400 Unsupported Provider Error)
+  // Instant 1-Tap Google Login (ZERO Form Inputs, Instant 2-Second Security Processing)
   const handleDirectGoogleLogin = () => {
     setActiveProvider('GOOGLE');
     const existingGoogleUser = deviceAccounts.find((a) => a.provider === 'GOOGLE');
     if (existingGoogleUser) {
       handleExecuteOneTapAccountSync(existingGoogleUser);
     } else {
-      setEmailInput('');
-      setNameInput('');
-      setPhoneInput('085113661387');
-      setModalStep('ENTER_CUSTOM_EMAIL');
+      const newGoogleUser = createQuickDeviceUser('user.google@gmail.com', 'Pengguna Google', 'GOOGLE');
+      handleExecuteOneTapAccountSync(newGoogleUser);
     }
   };
 
-  // Direct 1-Tap Trigger for Continue with Apple
+  // Instant 1-Tap Apple Login
   const handleDirectAppleLogin = () => {
     setActiveProvider('APPLE');
     const existingAppleUser = deviceAccounts.find((a) => a.provider === 'APPLE');
     if (existingAppleUser) {
       handleExecuteOneTapAccountSync(existingAppleUser);
     } else {
-      setEmailInput('');
-      setNameInput('');
-      setPhoneInput('085113661387');
-      setModalStep('ENTER_CUSTOM_EMAIL');
+      const newAppleUser = createQuickDeviceUser('user.apple@icloud.com', 'Apple ID User', 'APPLE');
+      handleExecuteOneTapAccountSync(newAppleUser);
     }
   };
 
-  // Handle Form Submission for Custom Email Entry
+  // Handle Form Submission for Custom Email Entry (Only when explicitly requested)
   const handleCustomEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!emailInput.trim()) return;
@@ -225,7 +221,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 Sign in to Continue
               </h2>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Masuk dengan Akun Google atau Apple ID Anda untuk menyinkronkan profil pemesan instan.
+                Tekan tombol di bawah untuk menyinkronkan Akun Google atau Apple ID Anda secara instan.
               </p>
             </div>
 
@@ -328,6 +324,16 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 </svg>
                 <span>Continue with Apple (iOS Device)</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setModalStep('ENTER_CUSTOM_EMAIL')}
+                className={`w-full py-2 text-[11px] font-bold text-center underline cursor-pointer ${
+                  isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'
+                }`}
+              >
+                Atau masuk dengan email lain
+              </button>
             </div>
 
             {/* Security Notice */}
@@ -344,7 +350,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
           </div>
         )}
 
-        {/* STEP 1.5: CUSTOM USER ACCOUNT ENTRY */}
+        {/* STEP 1.5: CUSTOM USER ACCOUNT ENTRY (ONLY SHOWN IF USER CLICKS "Masuk dengan email lain") */}
         {modalStep === 'ENTER_CUSTOM_EMAIL' && (
           <form onSubmit={handleCustomEmailSubmit} className="space-y-4 relative z-10 animate-fade-in">
             <div className="text-center space-y-1">
