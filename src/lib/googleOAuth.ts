@@ -1,4 +1,5 @@
 import { OAuth2Client, Credentials } from 'google-auth-library';
+import crypto from 'crypto';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '899274496131-nvvt5soqunfe5v1a08t5p9r3fha4g1qq.apps.googleusercontent.com';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
@@ -26,11 +27,24 @@ export const defaultScopes = [
   'openid'
 ];
 
-export const generateGoogleAuthorizationUrl = (customScopes?: string[]) => {
+/**
+ * Generate a secure 32-byte hex random state string to mitigate CSRF attacks
+ */
+export const generateOAuthState = (): string => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+/**
+ * Generate Google OAuth Authorization URL with offline access, incremental scopes, and CSRF state token
+ */
+export const generateGoogleAuthorizationUrl = (customScopes?: string[], state?: string) => {
+  const oauthState = state || generateOAuthState();
+
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: customScopes || defaultScopes,
     include_granted_scopes: true,
+    state: oauthState,
     prompt: 'select_account'
   });
 };
@@ -47,7 +61,6 @@ export const setGoogleCredentials = (credentials: Credentials) => {
 
 /**
  * Revoke a Google OAuth 2.0 Access Token / Refresh Token
- * Posts to https://oauth2.googleapis.com/revoke
  */
 export const revokeGoogleToken = async (token: string) => {
   try {
@@ -59,11 +72,8 @@ export const revokeGoogleToken = async (token: string) => {
       body: new URLSearchParams({ token }).toString(),
     });
 
-    const isOk = response.ok;
-    console.log('[Google OAuth Revoke Token]:', { status: response.status, ok: isOk });
-    return { success: isOk, status: response.status };
+    return { success: response.ok, status: response.status };
   } catch (err: any) {
-    console.error('[Google OAuth Revoke Token Exception]:', err);
     return { success: false, error: err?.message };
   }
 };

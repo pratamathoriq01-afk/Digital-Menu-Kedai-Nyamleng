@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateGoogleAuthorizationUrl } from '@/lib/googleOAuth';
+import { generateGoogleAuthorizationUrl, generateOAuthState } from '@/lib/googleOAuth';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const authorizationUrl = generateGoogleAuthorizationUrl();
+    const state = generateOAuthState();
+    const authorizationUrl = generateGoogleAuthorizationUrl(undefined, state);
+
+    console.log('[googleapis OAuth2] Generated CSRF State:', state);
     console.log('[googleapis OAuth2] Generated Authorization URL:', authorizationUrl);
     
     return NextResponse.json({
       success: true,
+      state,
       authorizationUrl,
     });
   } catch (err: any) {
