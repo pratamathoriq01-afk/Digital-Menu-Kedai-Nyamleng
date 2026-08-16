@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShieldCheck, 
   Lock, 
@@ -11,9 +11,17 @@ import {
   ArrowLeft, 
   CheckCircle2, 
   Mail,
-  User
+  User,
+  Sparkles
 } from 'lucide-react';
 import { CustomerUser, syncCustomerToSupabase } from '@/services/authService';
+import { supabase } from '@/lib/supabaseClient';
+
+declare global {
+  interface Window {
+    google: any;
+  }
+}
 
 interface GoogleLoginModalProps {
   isOpen: boolean;
@@ -22,6 +30,8 @@ interface GoogleLoginModalProps {
 
 type ModalStep = 'MAIN' | 'PROMPT_OAUTH_EMAIL' | 'CONFIRM_ACCOUNT';
 type AuthProvider = 'GOOGLE' | 'APPLE' | 'EMAIL';
+
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '1056580971275-8qf178491k6q08u7e5qg1d7g2e9s3h1j.apps.googleusercontent.com';
 
 export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   isOpen,
@@ -34,6 +44,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   const [selectedUser, setSelectedUser] = useState<CustomerUser | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
   // Detect System Theme Preference (prefers-color-scheme) automatically per user/device
   useEffect(() => {
@@ -48,9 +59,115 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   }, []);
 
+  // Initialize Native Google Identity Services (GIS) One-Tap Account Picker on Device
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined') return;
+
+    const handleGoogleCredentialResponse = async (response: any) => {
+      try {
+        console.log('[Google Identity Services] Credential Response Received from Device:', response);
+        const token = response.credential;
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const payload = JSON.parse(jsonPayload);
+
+        const activeDeviceUser: CustomerUser = {
+          id: `google-${payload.sub || Date.now()}`,
+          googleId: payload.sub || `g-${Date.now()}`,
+          name: payload.name || payload.given_name || payload.email.split('@')[0],
+          email: payload.email,
+          phone: '085113661387',
+          avatarUrl: payload.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(payload.email)}`,
+        };
+
+        setSelectedUser(activeDeviceUser);
+        setModalStep('CONFIRM_ACCOUNT');
+
+        // Auto-sync instantly to Supabase & LocalStorage
+        const synced = await syncCustomerToSupabase(activeDeviceUser);
+        onLoginSuccess(synced);
+      } catch (err) {
+        console.error('[Google Credential Parse Exception]:', err);
+      }
+    };
+
+    const initGIS = () => {
+      if (window.google?.accounts?.id) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleCredentialResponse,
+            auto_select: true,
+            cancel_on_tap_outside: false,
+          });
+
+          // Render Hidden Official Button & Trigger Native Device One-Tap Prompt
+          if (googleBtnRef.current) {
+            window.google.accounts.id.renderButton(googleBtnRef.current, {
+              type: 'standard',
+              theme: isDarkMode ? 'filled_black' : 'outline',
+              size: 'large',
+              width: '100%',
+              text: 'continue_with',
+            });
+          }
+
+          // Trigger Native Android/iOS Device Bottom Sheet Prompt
+          window.google.accounts.id.prompt();
+        } catch (e) {
+          console.warn('[GIS Init Warning]:', e);
+        }
+      }
+    };
+
+    const interval = setInterval(() => {
+      if (window.google?.accounts?.id) {
+        initGIS();
+        clearInterval(interval);
+      }
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, [isOpen, isDarkMode]);
+
   if (!isOpen) return null;
 
-  // Open Real Google or Apple Email OAuth Input Prompt
+  // Native Trigger for Google One-Tap / Supabase OAuth
+  const handleTriggerGoogleNativeLogin = async () => {
+    setActiveProvider('GOOGLE');
+    
+    // 1. Try Native Google Identity One-Tap Bottom Sheet
+    if (typeof window !== 'undefined' && window.google?.accounts?.id) {
+      window.google.accounts.id.prompt((notification: any) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          console.log('[GIS Notification] Triggering Supabase OAuth redirect fallback...');
+          // Fallback to Supabase OAuth or Email Prompt
+          handleOpenOAuthPrompt('GOOGLE');
+        }
+      });
+      return;
+    }
+
+    // 2. Try Supabase Auth OAuth Google
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: typeof window !== 'undefined' ? window.location.origin : '' }
+      });
+      if (error) throw error;
+    } catch (e) {
+      console.warn('[Supabase OAuth Notice]: Fallback to prompt mode.', e);
+      handleOpenOAuthPrompt('GOOGLE');
+    }
+  };
+
+  // Open Apple / Email OAuth Prompt
   const handleOpenOAuthPrompt = (provider: AuthProvider) => {
     setActiveProvider(provider);
     setEmailInput('');
@@ -150,7 +267,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
           </button>
         </div>
 
-        {/* STEP 1: MAIN LOGIN MODAL (Image 4 Presise Match) */}
+        {/* STEP 1: MAIN LOGIN MODAL */}
         {modalStep === 'MAIN' && (
           <div className="space-y-6 relative z-10 animate-fade-in">
             {/* Modal Brand Header */}
@@ -159,15 +276,18 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 Sign in to Continue
               </h2>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Masuk dengan Akun Google atau Apple ID untuk membuka menu &amp; riwayat pesanan.
+                Masuk dengan Akun Google atau Apple ID aktif di HP Anda untuk sinkronisasi profil instan.
               </p>
             </div>
 
-            {/* 1. Primary Button: Continue with Google (Image 4 Presise Match) */}
+            {/* 1. Primary Button: Continue with Google (Native Device Picker) */}
             <div className="space-y-3">
+              {/* Native Google GIS Render Target Container */}
+              <div ref={googleBtnRef} className="w-full hidden" />
+
               <button
                 type="button"
-                onClick={() => handleOpenOAuthPrompt('GOOGLE')}
+                onClick={handleTriggerGoogleNativeLogin}
                 className={`w-full py-3.5 px-4 text-xs sm:text-sm font-bold rounded-2xl border shadow-md flex items-center justify-center gap-3 transition-all cursor-pointer active:scale-98 ${
                   isDarkMode
                     ? 'bg-[#27272a] hover:bg-[#3f3f46] text-white border-white/15'
@@ -193,7 +313,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                <span>Continue with Google</span>
+                <span>Continue with Google (Native Active Account)</span>
               </button>
 
               {/* 2. Secondary Button: Continue with Apple (Mac / iPhone / iOS) */}
@@ -213,7 +333,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               </button>
             </div>
 
-            {/* Divider: OR (Image 4 Match) */}
+            {/* Divider: OR */}
             <div className="relative flex items-center justify-center py-0.5">
               <div className={`w-full border-t ${isDarkMode ? 'border-white/10' : 'border-gray-200'}`} />
               <span className={`px-4 text-[11px] font-extrabold uppercase tracking-widest relative ${
@@ -223,7 +343,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               </span>
             </div>
 
-            {/* Manual Email Input Form (Image 4 Match) */}
+            {/* Manual Email Input Form */}
             <form onSubmit={handleOAuthPromptSubmit} className="space-y-3.5">
               <div>
                 <label className={`text-[11px] font-bold block mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-700'}`}>
@@ -379,15 +499,16 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 <img
                   src={selectedUser.avatarUrl}
                   alt={selectedUser.name}
-                  className="w-12 h-12 rounded-full border-2 border-emerald-500 shrink-0"
+                  className="w-12 h-12 rounded-full border-2 border-emerald-500 shrink-0 object-cover"
                 />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h4 className={`font-black text-sm truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                       {selectedUser.name}
                     </h4>
-                    <span className="bg-emerald-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full">
-                      Verified
+                    <span className="bg-emerald-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
+                      <Sparkles className="w-2.5 h-2.5" />
+                      <span>Verified Google</span>
                     </span>
                   </div>
                   <p className={`text-xs font-semibold truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>

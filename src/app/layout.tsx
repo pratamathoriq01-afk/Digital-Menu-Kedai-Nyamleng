@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Lexend } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 import { cn } from "@/lib/utils";
 
@@ -47,6 +48,10 @@ export default function RootLayout({
         className={`${inter.className} antialiased selection:bg-nyamleng-500 selection:text-white bg-parchment text-charcoal min-h-screen flex flex-col`}
       >
         {children}
+        <Script 
+          src="https://accounts.google.com/gsi/client" 
+          strategy="afterInteractive" 
+        />
       </body>
     </html>
   );
