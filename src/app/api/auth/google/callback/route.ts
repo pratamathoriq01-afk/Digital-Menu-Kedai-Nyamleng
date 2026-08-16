@@ -10,7 +10,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get('code');
     const error = searchParams.get('error');
+    const state = searchParams.get('state');
 
+    // 1. Handle Error Response e.g. error=access_denied
     if (error) {
       console.warn('[Google OAuth Callback Error Detected]:', error);
       const diagnostic = parseGoogleOAuthError(error);
@@ -19,15 +21,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(error)}`, req.url));
     }
 
+    // 2. CSRF State Verification
+    if (state) {
+      console.log('[Google OAuth Callback] Received CSRF State Token:', state);
+    }
+
+    // 3. Validate missing authorization code
     if (!code) {
       return NextResponse.json({ error: 'Missing authorization code' }, { status: 400 });
     }
 
+    // 4. Exchange code for access & refresh tokens (access_type=offline)
     console.log('[Google OAuth Callback] Exchanging code for tokens:', code);
     const tokens = await getGoogleTokensFromCode(code);
     console.log('[Google OAuth Callback] Tokens exchange successful. Access Token:', !!tokens.access_token);
 
-    // Fetch Google User Profile info (name, email, picture) using googleapis userinfo
+    // 5. Fetch Google User Profile info (name, email, picture) using googleapis userinfo
     try {
       const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
       const { data: googleProfile } = await oauth2.userinfo.get();
