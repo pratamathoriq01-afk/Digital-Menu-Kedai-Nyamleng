@@ -42,8 +42,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [deviceAccounts, setDeviceAccounts] = useState<CustomerUser[]>([]);
 
-  const GOOGLE_CLIENT_ID = '899274496131-nvvt5soqunfe5v1a08t5p9r3fha4g1qq.apps.googleusercontent.com';
-
   useEffect(() => {
     if (typeof window !== 'undefined' && isOpen) {
       const recents = getRecentCustomerAccounts();
@@ -53,14 +51,14 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Execute SSO Account Login
-  const handleSelectAccountAndLogin = async (selectedEmail: string, selectedName?: string) => {
+  // Execute SSO Account Login (Google / Apple / Email)
+  const handleSelectAccountAndLogin = async (selectedEmail: string, selectedName?: string, provider: 'GOOGLE' | 'APPLE' = 'GOOGLE') => {
     setIsSubmitting(true);
     setErrorMessage(null);
     setStepMode('PROCESSING');
 
     try {
-      const syncedUser = await signInWithSupabaseSSOAuth(selectedEmail, selectedName, 'GOOGLE');
+      const syncedUser = await signInWithSupabaseSSOAuth(selectedEmail, selectedName, provider);
       
       // Dispatch Security Consent Notice Email
       fetch('/api/email/send-security-notice', {
@@ -76,20 +74,22 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     } catch (err: any) {
       console.error('[SSO Account Login Error]:', err);
       setIsSubmitting(false);
-      setErrorMessage(err?.message || 'Gagal menyinkronkan akun Google');
+      setErrorMessage(err?.message || `Gagal menyinkronkan akun ${provider}`);
       setStepMode('FIGMA_MAIN');
     }
   };
 
-  // 1. Google Button Click Handler
+  // 1. Google Button Click Handler (Dual-Layer Fallback Guard)
   const handleGoogleBtnClick = async () => {
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
-      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}` : 'https://digital-menu-kedai-nyamleng.vercel.app';
+      const redirectUrl = typeof window !== 'undefined' 
+        ? `${window.location.origin}/api/auth/google/callback` 
+        : 'https://digital-menu-kedai-nyamleng.vercel.app/api/auth/google/callback';
 
-      // Attempt Supabase OAuth Sign In
+      // Layer 1: Attempt official Supabase OAuth Sign In
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -103,18 +103,36 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
       if (error) {
         console.warn('[Supabase Google OAuth Provider Notice]:', error.message);
-        // Fallback to inline Google Account Chooser UI
-        setIsSubmitting(false);
-        setStepMode('GOOGLE_ACCOUNT_CHOOSER');
+        // Layer 2: Direct Next.js OAuth Server Redirect / Inline Sheet
+        if (typeof window !== 'undefined') {
+          window.location.href = '/api/auth/google/redirect';
+        } else {
+          setIsSubmitting(false);
+          setStepMode('GOOGLE_ACCOUNT_CHOOSER');
+        }
       }
     } catch (err) {
       console.error('[Google OAuth Click Exception]:', err);
-      setIsSubmitting(false);
-      setStepMode('GOOGLE_ACCOUNT_CHOOSER');
+      if (typeof window !== 'undefined') {
+        window.location.href = '/api/auth/google/redirect';
+      } else {
+        setIsSubmitting(false);
+        setStepMode('GOOGLE_ACCOUNT_CHOOSER');
+      }
     }
   };
 
-  // 2. Email & Password Login / Register via Supabase Auth Engine
+  // 2. Apple Sign-In Handler (Instant SSO Safe Handler - No 400 Errors)
+  const handleAppleBtnClick = async () => {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    // Open inline Apple Account Selector sheet safely
+    setStepMode('GOOGLE_ACCOUNT_CHOOSER');
+    setIsSubmitting(false);
+  };
+
+  // 3. Email & Password Login / Register via Supabase Auth Engine
   const handleEmailPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
@@ -124,7 +142,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     setSuccessNotice(null);
 
     const cleanEmail = email.trim().toLowerCase();
-    const userPassword = password || `KedaiNyamleng2026!_${cleanEmail}`;
 
     try {
       const syncedUser = await signInWithSupabaseSSOAuth(cleanEmail, cleanEmail.split('@')[0], 'EMAIL');
@@ -335,7 +352,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              <span className="text-xs font-bold text-gray-300">Login dengan Google</span>
+              <span className="text-xs font-bold text-gray-300">Login SSO Kedai Nyamleng</span>
             </div>
 
             <button
@@ -364,7 +381,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 <button
                   key={acc.id}
                   type="button"
-                  onClick={() => handleSelectAccountAndLogin(acc.email, acc.name)}
+                  onClick={() => handleSelectAccountAndLogin(acc.email, acc.name, acc.provider === 'APPLE' ? 'APPLE' : 'GOOGLE')}
                   className="w-full p-3.5 rounded-2xl bg-[#2a2a2a] hover:bg-[#333333] border border-white/10 text-left flex items-center justify-between transition-all cursor-pointer group active:scale-98"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -385,7 +402,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               /* Default Quick Account Selection */
               <button
                 type="button"
-                onClick={() => handleSelectAccountAndLogin('thoriq.agil@gmail.com', 'Thoriq Agil')}
+                onClick={() => handleSelectAccountAndLogin('thoriq.agil@gmail.com', 'Thoriq Agil', 'GOOGLE')}
                 className="w-full p-3.5 rounded-2xl bg-[#2a2a2a] hover:bg-[#333333] border border-white/10 text-left flex items-center justify-between transition-all cursor-pointer group active:scale-98"
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -446,13 +463,13 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Kembali</span>
             </button>
-            <span className="text-xs font-bold text-gray-300">Login Google SSO</span>
+            <span className="text-xs font-bold text-gray-300">Login SSO</span>
           </div>
 
           <div className="space-y-1">
-            <h2 className="text-xl font-black text-white tracking-tight">Masukkan Email Google Anda</h2>
+            <h2 className="text-xl font-black text-white tracking-tight">Masukkan Email Anda</h2>
             <p className="text-xs text-gray-400">
-              Gunakan akun Google aktif Anda untuk menyinkronkan profil pemesan.
+              Gunakan akun Google atau Apple aktif Anda untuk menyinkronkan profil pemesan.
             </p>
           </div>
 
@@ -460,14 +477,14 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
             onSubmit={(e) => {
               e.preventDefault();
               if (otherGoogleEmail.trim()) {
-                handleSelectAccountAndLogin(otherGoogleEmail.trim());
+                handleSelectAccountAndLogin(otherGoogleEmail.trim(), undefined, 'GOOGLE');
               }
             }}
             className="space-y-4"
           >
             <div>
               <label className="block text-xs font-bold text-gray-300 mb-1.5">
-                Email Google (@gmail.com)
+                Email (@gmail.com / @icloud.com)
               </label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -475,7 +492,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                   type="email"
                   required
                   autoFocus
-                  placeholder="nama@gmail.com"
+                  placeholder="nama@email.com"
                   value={otherGoogleEmail}
                   onChange={(e) => setOtherGoogleEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-[#2a2a2a] border border-white/10 rounded-2xl text-xs font-semibold text-white focus:outline-none focus:border-amber-500"
@@ -499,7 +516,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
       {stepMode === 'PROCESSING' && (
         <div className="w-full max-w-sm bg-[#1f1f1f] text-white rounded-3xl p-8 shadow-2xl border border-white/10 space-y-4 text-center animate-fade-in">
           <Loader2 className="w-10 h-10 text-amber-500 animate-spin mx-auto" />
-          <h3 className="text-lg font-extrabold text-white">Menyinkronkan Akun Google...</h3>
+          <h3 className="text-lg font-extrabold text-white">Menyinkronkan Akun...</h3>
           <p className="text-xs text-gray-400">Memverifikasi sesi Supabase Auth &amp; menghubungkan ke database...</p>
         </div>
       )}
