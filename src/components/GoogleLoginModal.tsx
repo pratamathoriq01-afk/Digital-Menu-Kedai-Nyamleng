@@ -20,8 +20,7 @@ import {
   CustomerUser, 
   syncCustomerToSupabase, 
   createQuickDeviceUser,
-  getRecentCustomerAccounts,
-  signInWithGoogleSSO
+  getRecentCustomerAccounts
 } from '@/services/authService';
 
 interface GoogleLoginModalProps {
@@ -116,29 +115,17 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   };
 
-  // Direct 1-Tap Trigger for Continue with Google (Zero Error Guarantee)
-  const handleDirectGoogleLogin = async () => {
+  // Direct 1-Tap Trigger for Continue with Google (Eliminates Supabase 400 Unsupported Provider Error)
+  const handleDirectGoogleLogin = () => {
     setActiveProvider('GOOGLE');
-    setIsSubmitting(true);
-
-    try {
-      // Attempt Supabase Auth OAuth SSO Provider First
-      const ssoRes = await signInWithGoogleSSO();
-      if (ssoRes?.url) {
-        window.location.href = ssoRes.url;
-        return;
-      }
-    } catch (e) {
-      console.warn('[Supabase OAuth SSO Notice, using Direct 1-Tap Sync]:', e);
-    }
-
-    // Fallback to Instant 1-Tap Google Account Sync
     const existingGoogleUser = deviceAccounts.find((a) => a.provider === 'GOOGLE');
     if (existingGoogleUser) {
       handleExecuteOneTapAccountSync(existingGoogleUser);
     } else {
-      const defaultGoogleUser = createQuickDeviceUser('user.google@gmail.com', 'Akun Google Saya', 'GOOGLE');
-      handleExecuteOneTapAccountSync(defaultGoogleUser);
+      setEmailInput('');
+      setNameInput('');
+      setPhoneInput('085113661387');
+      setModalStep('ENTER_CUSTOM_EMAIL');
     }
   };
 
@@ -149,8 +136,10 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     if (existingAppleUser) {
       handleExecuteOneTapAccountSync(existingAppleUser);
     } else {
-      const defaultAppleUser = createQuickDeviceUser('user.apple@icloud.com', 'Apple ID User', 'APPLE');
-      handleExecuteOneTapAccountSync(defaultAppleUser);
+      setEmailInput('');
+      setNameInput('');
+      setPhoneInput('085113661387');
+      setModalStep('ENTER_CUSTOM_EMAIL');
     }
   };
 
@@ -338,16 +327,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                   <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-5.04.24-9.87-1.82-14.49-6.17-3.17-2.82-7.05-7.53-11.64-14.12-6.53-9.4-11.75-20.04-15.66-31.9-3.91-11.87-5.87-23.36-5.87-34.48 0-14.7 3.65-26.68 10.94-35.95 7.3-9.27 16.48-14 27.54-14.19 4.89 0 9.87 1.18 14.94 3.53 5.08 2.35 8.78 3.53 11.1 3.53 2.11 0 5.86-1.18 11.24-3.53 5.37-2.35 10.15-3.41 14.33-3.17 11.99.94 21.6 5.65 28.82 14.12-10.59 6.47-15.77 15.3-15.54 26.48.24 9.17 3.89 16.82 10.95 22.94 7.06 6.12 15.42 9.53 25.07 10.23-2.58 7.76-5.87 15.41-9.87 22.93zM119.22 31.06c0-7.06 2.47-13.94 7.41-20.64 4.94-6.7 11.18-10.82 18.71-12.35.24.94.35 1.88.35 2.82 0 7.06-2.53 13.94-7.59 20.64-5.06 6.7-11.24 10.76-18.53 12.18-.12-.88-.35-1.77-.35-2.65z" />
                 </svg>
                 <span>Continue with Apple (iOS Device)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setModalStep('ENTER_CUSTOM_EMAIL')}
-                className={`w-full py-2 text-[11px] font-bold text-center underline cursor-pointer ${
-                  isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'
-                }`}
-              >
-                Atau masuk dengan email lain
               </button>
             </div>
 
