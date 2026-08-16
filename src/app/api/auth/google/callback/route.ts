@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
 
     // 6. Fetch Google User Profile info (name, email, picture) using googleapis userinfo
     try {
-      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client as any });
       const { data: googleProfile } = await oauth2.userinfo.get();
       
       if (googleProfile && googleProfile.email) {

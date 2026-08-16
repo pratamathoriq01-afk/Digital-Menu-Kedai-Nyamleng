@@ -141,7 +141,7 @@ export const setGoogleCredentials = (credentials: Credentials) => {
  * 7. Call Google UserInfo API on behalf of the authorized user account
  */
 export const fetchGoogleUserProfile = async (client?: OAuth2Client) => {
-  const oauth2 = google.oauth2({ version: 'v2', auth: client || oauth2Client });
+  const oauth2 = google.oauth2({ version: 'v2', auth: (client || oauth2Client) as any });
   const response = await oauth2.userinfo.get();
   return response.data;
 };
@@ -150,7 +150,7 @@ export const fetchGoogleUserProfile = async (client?: OAuth2Client) => {
  * 8. Call Google Drive API (drive.metadata.readonly)
  */
 export const fetchGoogleDriveFiles = async (client?: OAuth2Client, pageSize: number = 10) => {
-  const drive = google.drive({ version: 'v3', auth: client || oauth2Client });
+  const drive = google.drive({ version: 'v3', auth: (client || oauth2Client) as any });
   const response = await drive.files.list({
     pageSize,
     fields: 'nextPageToken, files(id, name)',
@@ -162,7 +162,7 @@ export const fetchGoogleDriveFiles = async (client?: OAuth2Client, pageSize: num
  * 9. Call Google Calendar API (calendar.readonly)
  */
 export const fetchGoogleCalendarEvents = async (client?: OAuth2Client, maxResults: number = 10) => {
-  const calendar = google.calendar({ version: 'v3', auth: client || oauth2Client });
+  const calendar = google.calendar({ version: 'v3', auth: (client || oauth2Client) as any });
   const response = await calendar.events.list({
     calendarId: 'primary',
     timeMin: new Date().toISOString(),

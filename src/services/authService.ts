@@ -122,13 +122,18 @@ export const signInWithSupabaseSSOAuth = async (
 
   try {
     // 1. Try to sign in to official Supabase Auth Engine
-    let { data: authData, error: signInErr } = await supabase.auth.signInWithPassword({
+    let authResult: { user?: any; session?: any } = {};
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password: dummyPassword,
     });
 
+    if (signInData?.user) {
+      authResult = signInData;
+    }
+
     // 2. If user doesn't exist in Supabase Auth yet, create official user in auth.users
-    if (signInErr) {
+    if (signInErr || !authResult.user) {
       const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
         email: cleanEmail,
         password: dummyPassword,
@@ -139,17 +144,17 @@ export const signInWithSupabaseSSOAuth = async (
           },
         },
       });
-      if (!signUpErr && signUpData.user) {
-        authData = { session: signUpData.session, user: signUpData.user };
+      if (!signUpErr && signUpData?.user) {
+        authResult = { session: signUpData.session, user: signUpData.user };
       }
     }
 
     const customerUser: CustomerUser = {
-      id: authData?.user?.id || `${provider.toLowerCase()}-${Date.now()}`,
-      googleId: provider === 'GOOGLE' ? authData?.user?.id || `g-${Date.now()}` : undefined,
-      appleId: provider === 'APPLE' ? authData?.user?.id || `apple-${Date.now()}` : undefined,
+      id: authResult.user?.id || `${provider.toLowerCase()}-${Date.now()}`,
+      googleId: provider === 'GOOGLE' ? authResult.user?.id || `g-${Date.now()}` : undefined,
+      appleId: provider === 'APPLE' ? authResult.user?.id || `apple-${Date.now()}` : undefined,
       provider: provider,
-      name: name || authData?.user?.user_metadata?.full_name || cleanEmail.split('@')[0].replace(/[._-]/g, ' '),
+      name: name || authResult.user?.user_metadata?.full_name || cleanEmail.split('@')[0].replace(/[._-]/g, ' '),
       email: cleanEmail,
       phone: '085113661387',
       avatarUrl: provider === 'APPLE'
