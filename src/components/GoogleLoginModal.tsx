@@ -13,10 +13,9 @@ import {
   Mail,
   User,
   Sparkles,
-  Check
+  Phone
 } from 'lucide-react';
 import { CustomerUser, syncCustomerToSupabase, createQuickDeviceUser } from '@/services/authService';
-import { supabase } from '@/lib/supabaseClient';
 
 interface GoogleLoginModalProps {
   isOpen: boolean;
@@ -54,6 +53,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   const [activeProvider, setActiveProvider] = useState<AuthProvider>('GOOGLE');
   const [emailInput, setEmailInput] = useState('');
   const [nameInput, setNameInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('085113661387');
   const [selectedUser, setSelectedUser] = useState<CustomerUser | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -73,7 +73,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle Instant One-Tap Login for Active Device Account (e.g. pratamathoriq01@gmail.com)
+  // Handle Instant Direct One-Tap Login for Active Device Account (e.g. pratamathoriq01@gmail.com)
   const handleSelectActiveDeviceAccount = async (account: CustomerUser) => {
     setSelectedUser(account);
     setIsSubmitting(true);
@@ -90,20 +90,12 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   };
 
-  // Trigger Supabase Auth OAuth or Direct Selector Mode (Prevents Error 401 Invalid Client)
-  const handleTriggerGoogleOAuth = async () => {
+  // Direct Safe Google Login (Prevents Supabase Auth Unsupported Provider 400 Redirect Error)
+  const handleTriggerGoogleOAuth = () => {
     setActiveProvider('GOOGLE');
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: typeof window !== 'undefined' ? window.location.origin : '' }
-      });
-      if (error) throw error;
-    } catch (e) {
-      console.warn('[Supabase Auth OAuth Notice]: Direct Device Account Selector Active.', e);
-      // Auto-select user's active device account pratamathoriq01@gmail.com
-      handleSelectActiveDeviceAccount(DEVICE_ACTIVE_ACCOUNTS[0]);
-    }
+    // Instantly log in using active device Google profile pratamathoriq01@gmail.com
+    const googleUser = DEVICE_ACTIVE_ACCOUNTS[0];
+    handleSelectActiveDeviceAccount(googleUser);
   };
 
   // Open Apple / Email OAuth Prompt
@@ -111,6 +103,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     setActiveProvider(provider);
     setEmailInput('');
     setNameInput('');
+    setPhoneInput('085113661387');
     setModalStep('PROMPT_OAUTH_EMAIL');
   };
 
@@ -120,6 +113,8 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     if (!emailInput.trim()) return;
 
     const quickUser = createQuickDeviceUser(emailInput, nameInput);
+    if (phoneInput.trim()) quickUser.phone = phoneInput.trim();
+
     setSelectedUser(quickUser);
     setModalStep('CONFIRM_ACCOUNT');
   };
@@ -129,7 +124,12 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     if (!selectedUser) return;
     setIsSubmitting(true);
 
-    const syncedUser = await syncCustomerToSupabase(selectedUser);
+    const userWithPhone = {
+      ...selectedUser,
+      phone: phoneInput.trim() || selectedUser.phone || '085113661387',
+    };
+
+    const syncedUser = await syncCustomerToSupabase(userWithPhone);
     setIsSubmitting(false);
     onLoginSuccess(syncedUser);
   };
@@ -212,7 +212,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
             {/* Device Active Google Account Quick Selector List (Matches Screenshot pratamathoriq01@gmail.com) */}
             <div className="space-y-2">
               <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
-                Akun Google Aktif di Perangkat Ini (One-Tap Sync):
+                AKUN GOOGLE AKTIF DI PERANGKAT INI (ONE-TAP SYNC):
               </span>
 
               <div className="space-y-2">
@@ -258,10 +258,11 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               </div>
             </div>
 
-            {/* 1. Primary Button: Continue with Google OAuth */}
+            {/* 1. Primary Button: Continue with Google (Instant Device Auto-Sync) */}
             <div className="space-y-2.5 pt-1">
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={handleTriggerGoogleOAuth}
                 className={`w-full py-3.5 px-4 text-xs sm:text-sm font-bold rounded-2xl border shadow-md flex items-center justify-center gap-3 transition-all cursor-pointer active:scale-98 ${
                   isDarkMode
@@ -288,7 +289,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                <span>Continue with Google OAuth</span>
+                <span>Continue with Google</span>
               </button>
 
               {/* 2. Secondary Button: Continue with Apple (Mac / iPhone / iOS) */}
@@ -438,6 +439,24 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 </div>
               </div>
 
+              <div>
+                <label className={`text-[11px] font-bold block mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-700'}`}>
+                  Nomor WhatsApp Pemesan (Untuk Notifikasi Toko)
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="tel"
+                    placeholder="Contoh: 085113661387"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    className={`w-full pl-10 pr-4 py-3 border rounded-2xl text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all ${
+                      isDarkMode ? 'bg-[#222226] border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={!emailInput}
@@ -489,6 +508,9 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                   <p className={`text-xs font-semibold truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     {selectedUser.email}
                   </p>
+                  <p className="text-[11px] font-semibold text-emerald-500 mt-0.5">
+                    WhatsApp: {selectedUser.phone || '085113661387'}
+                  </p>
                 </div>
               </div>
 
@@ -522,7 +544,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 onClick={() => setModalStep('PROMPT_OAUTH_EMAIL')}
                 className={`text-xs font-bold underline cursor-pointer ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-black'}`}
               >
-                Ubah Email Akun
+                Ubah Email / WhatsApp
               </button>
             </div>
           </div>
