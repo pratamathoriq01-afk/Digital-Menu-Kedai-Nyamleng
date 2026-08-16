@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   keywords: ['Kedai Nyamleng', 'Kuliner Malang', 'Menu Digital', 'Pesan Makan Online Malang', 'QRIS Statis'],
   authors: [{ name: 'Kedai Nyamleng Team' }],
   verification: {
-    google: 'nqoF14-CdsVQa3MiJQ24c8PtYtVi4Jl4883cUcZvfsM',
+    google: ['nqoF14-CdsVQa3MiJQ24c8PtYtVi4Jl4883cUcZvfsM', 'google6536e6ac080b8d5a'],
   },
   openGraph: {
     title: 'Kedai Nyamleng Malang - Menu Digital & Pemesanan Instan',
