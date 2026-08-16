@@ -13,9 +13,16 @@ import {
   Mail,
   User,
   Sparkles,
-  Phone
+  Phone,
+  PlusCircle,
+  Apple
 } from 'lucide-react';
-import { CustomerUser, syncCustomerToSupabase, createQuickDeviceUser } from '@/services/authService';
+import { 
+  CustomerUser, 
+  syncCustomerToSupabase, 
+  createQuickDeviceUser,
+  getRecentCustomerAccounts 
+} from '@/services/authService';
 
 interface GoogleLoginModalProps {
   isOpen: boolean;
@@ -25,11 +32,11 @@ interface GoogleLoginModalProps {
 type ModalStep = 'MAIN' | 'PROMPT_OAUTH_EMAIL' | 'CONFIRM_ACCOUNT';
 type AuthProvider = 'GOOGLE' | 'APPLE' | 'EMAIL';
 
-// Preserved Active Accounts detected on User's Device (Matches Screenshot pratamathoriq01@gmail.com)
-const DEVICE_ACTIVE_ACCOUNTS: CustomerUser[] = [
+const DEFAULT_ACCOUNTS: CustomerUser[] = [
   {
     id: 'google-pratamathoriq01',
     googleId: 'g-1029384756',
+    provider: 'GOOGLE',
     name: 'Pratama Thoriq',
     email: 'pratamathoriq01@gmail.com',
     phone: '085113661387',
@@ -38,6 +45,7 @@ const DEVICE_ACTIVE_ACCOUNTS: CustomerUser[] = [
   {
     id: 'google-kedainyamleng03',
     googleId: 'g-1029384757',
+    provider: 'GOOGLE',
     name: 'Kedai Nyamleng Official',
     email: 'kedainyamleng03@gmail.com',
     phone: '085113661387',
@@ -57,6 +65,24 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   const [selectedUser, setSelectedUser] = useState<CustomerUser | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [deviceAccounts, setDeviceAccounts] = useState<CustomerUser[]>(DEFAULT_ACCOUNTS);
+
+  // Load Recent Accounts from Device LocalStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const recents = getRecentCustomerAccounts();
+      if (recents.length > 0) {
+        // Merge recents with defaults ensuring uniqueness by email
+        const merged = [...recents];
+        DEFAULT_ACCOUNTS.forEach((def) => {
+          if (!merged.some((m) => m.email.toLowerCase() === def.email.toLowerCase())) {
+            merged.push(def);
+          }
+        });
+        setDeviceAccounts(merged);
+      }
+    }
+  }, [isOpen]);
 
   // Detect System Theme Preference (prefers-color-scheme) automatically per user/device
   useEffect(() => {
@@ -73,7 +99,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle Instant Direct One-Tap Login for Active Device Account (e.g. pratamathoriq01@gmail.com)
+  // Handle Instant Direct One-Tap Login for Active Device Account
   const handleSelectActiveDeviceAccount = async (account: CustomerUser) => {
     setSelectedUser(account);
     setIsSubmitting(true);
@@ -90,15 +116,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   };
 
-  // Direct Safe Google Login (Prevents Supabase Auth Unsupported Provider 400 Redirect Error)
-  const handleTriggerGoogleOAuth = () => {
-    setActiveProvider('GOOGLE');
-    // Instantly log in using active device Google profile pratamathoriq01@gmail.com
-    const googleUser = DEVICE_ACTIVE_ACCOUNTS[0];
-    handleSelectActiveDeviceAccount(googleUser);
-  };
-
-  // Open Apple / Email OAuth Prompt
+  // Open Google / Apple / Email OAuth Prompt
   const handleOpenOAuthPrompt = (provider: AuthProvider) => {
     setActiveProvider(provider);
     setEmailInput('');
@@ -112,7 +130,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     e.preventDefault();
     if (!emailInput.trim()) return;
 
-    const quickUser = createQuickDeviceUser(emailInput, nameInput);
+    const quickUser = createQuickDeviceUser(emailInput, nameInput, activeProvider);
     if (phoneInput.trim()) quickUser.phone = phoneInput.trim();
 
     setSelectedUser(quickUser);
@@ -205,18 +223,18 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 Sign in to Continue
               </h2>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Pilih Akun Google aktif pada perangkat Anda untuk sinkronisasi profil instan.
+                Pilih Akun Google / Apple ID aktif pada perangkat Anda untuk sinkronisasi profil instan.
               </p>
             </div>
 
-            {/* Device Active Google Account Quick Selector List (Matches Screenshot pratamathoriq01@gmail.com) */}
+            {/* Device Active Accounts Quick Selector List */}
             <div className="space-y-2">
               <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
-                AKUN GOOGLE AKTIF DI PERANGKAT INI (ONE-TAP SYNC):
+                AKUN AKTIF DI PERANGKAT INI (ONE-TAP SYNC):
               </span>
 
               <div className="space-y-2">
-                {DEVICE_ACTIVE_ACCOUNTS.map((acc) => (
+                {deviceAccounts.map((acc) => (
                   <button
                     key={acc.id}
                     type="button"
@@ -241,7 +259,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                           </span>
                           <span className="bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
                             <Sparkles className="w-2.5 h-2.5" />
-                            <span>Active</span>
+                            <span>{acc.provider === 'APPLE' ? 'Apple ID' : 'Google'}</span>
                           </span>
                         </div>
                         <span className={`text-[11px] font-medium block truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -258,12 +276,12 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               </div>
             </div>
 
-            {/* 1. Primary Button: Continue with Google (Instant Device Auto-Sync) */}
+            {/* 1. Primary Button: Continue with Google */}
             <div className="space-y-2.5 pt-1">
               <button
                 type="button"
                 disabled={isSubmitting}
-                onClick={handleTriggerGoogleOAuth}
+                onClick={() => handleOpenOAuthPrompt('GOOGLE')}
                 className={`w-full py-3.5 px-4 text-xs sm:text-sm font-bold rounded-2xl border shadow-md flex items-center justify-center gap-3 transition-all cursor-pointer active:scale-98 ${
                   isDarkMode
                     ? 'bg-[#27272a] hover:bg-[#3f3f46] text-white border-white/15'
@@ -292,9 +310,10 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 <span>Continue with Google</span>
               </button>
 
-              {/* 2. Secondary Button: Continue with Apple (Mac / iPhone / iOS) */}
+              {/* 2. Secondary Button: Continue with Apple (iOS / iPhone / Mac / iPad) */}
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => handleOpenOAuthPrompt('APPLE')}
                 className={`w-full py-3.5 px-4 text-xs sm:text-sm font-bold rounded-2xl border shadow-md flex items-center justify-center gap-3 transition-all cursor-pointer active:scale-98 ${
                   isDarkMode
@@ -305,7 +324,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 <svg className="w-5 h-5 fill-current shrink-0" viewBox="0 0 170 170">
                   <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-5.04.24-9.87-1.82-14.49-6.17-3.17-2.82-7.05-7.53-11.64-14.12-6.53-9.4-11.75-20.04-15.66-31.9-3.91-11.87-5.87-23.36-5.87-34.48 0-14.7 3.65-26.68 10.94-35.95 7.3-9.27 16.48-14 27.54-14.19 4.89 0 9.87 1.18 14.94 3.53 5.08 2.35 8.78 3.53 11.1 3.53 2.11 0 5.86-1.18 11.24-3.53 5.37-2.35 10.15-3.41 14.33-3.17 11.99.94 21.6 5.65 28.82 14.12-10.59 6.47-15.77 15.3-15.54 26.48.24 9.17 3.89 16.82 10.95 22.94 7.06 6.12 15.42 9.53 25.07 10.23-2.58 7.76-5.87 15.41-9.87 22.93zM119.22 31.06c0-7.06 2.47-13.94 7.41-20.64 4.94-6.7 11.18-10.82 18.71-12.35.24.94.35 1.88.35 2.82 0 7.06-2.53 13.94-7.59 20.64-5.06 6.7-11.24 10.76-18.53 12.18-.12-.88-.35-1.77-.35-2.65z" />
                 </svg>
-                <span>Continue with Apple</span>
+                <span>Continue with Apple (iOS Device)</span>
               </button>
             </div>
 
@@ -323,12 +342,12 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
             <form onSubmit={handleOAuthPromptSubmit} className="space-y-3.5">
               <div>
                 <label className={`text-[11px] font-bold block mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-700'}`}>
-                  Enter your email:
+                  Masukan Email Google / Apple ID:
                 </label>
                 <input
                   type="email"
                   required
-                  placeholder="name@example.com"
+                  placeholder="nama@example.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   className={`w-full px-4 py-3 border rounded-2xl text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all ${
@@ -362,7 +381,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
           </div>
         )}
 
-        {/* STEP 2: REAL OAUTH EMAIL PROMPT */}
+        {/* STEP 2: REAL OAUTH EMAIL & WHATSAPP PROMPT */}
         {modalStep === 'PROMPT_OAUTH_EMAIL' && (
           <form onSubmit={handleOAuthPromptSubmit} className="space-y-5 relative z-10 animate-fade-in">
             <div className="text-center space-y-1">
@@ -387,13 +406,13 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                     />
                   </svg>
                 ) : (
-                  <svg className="w-6 h-6 fill-current" viewBox="0 0 170 170">
+                  <svg className="w-6 h-6 fill-current text-white" viewBox="0 0 170 170">
                     <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-5.04.24-9.87-1.82-14.49-6.17-3.17-2.82-7.05-7.53-11.64-14.12-6.53-9.4-11.75-20.04-15.66-31.9-3.91-11.87-5.87-23.36-5.87-34.48 0-14.7 3.65-26.68 10.94-35.95 7.3-9.27 16.48-14 27.54-14.19 4.89 0 9.87 1.18 14.94 3.53 5.08 2.35 8.78 3.53 11.1 3.53 2.11 0 5.86-1.18 11.24-3.53 5.37-2.35 10.15-3.41 14.33-3.17 11.99.94 21.6 5.65 28.82 14.12-10.59 6.47-15.77 15.3-15.54 26.48.24 9.17 3.89 16.82 10.95 22.94 7.06 6.12 15.42 9.53 25.07 10.23-2.58 7.76-5.87 15.41-9.87 22.93zM119.22 31.06c0-7.06 2.47-13.94 7.41-20.64 4.94-6.7 11.18-10.82 18.71-12.35.24.94.35 1.88.35 2.82 0 7.06-2.53 13.94-7.59 20.64-5.06 6.7-11.24 10.76-18.53 12.18-.12-.88-.35-1.77-.35-2.65z" />
                   </svg>
                 )}
               </div>
               <h3 className={`text-lg font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                Verifikasi Akun {activeProvider === 'GOOGLE' ? 'Google' : 'Apple ID'}
+                Verifikasi Akun {activeProvider === 'GOOGLE' ? 'Google' : activeProvider === 'APPLE' ? 'Apple ID (iOS)' : 'Email'}
               </h3>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 Masukkan Email {activeProvider === 'GOOGLE' ? 'Google (@gmail.com)' : 'Apple ID (@icloud.com)'} aktif Anda di perangkat ini.
@@ -441,7 +460,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
               <div>
                 <label className={`text-[11px] font-bold block mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-700'}`}>
-                  Nomor WhatsApp Pemesan (Untuk Notifikasi Toko)
+                  Nomor WhatsApp Pemesan (Untuk E-Receipt &amp; Dapur)
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -502,7 +521,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                     </h4>
                     <span className="bg-emerald-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
                       <Sparkles className="w-2.5 h-2.5" />
-                      <span>Verified Google</span>
+                      <span>{selectedUser.provider === 'APPLE' ? 'Verified Apple ID' : 'Verified Google'}</span>
                     </span>
                   </div>
                   <p className={`text-xs font-semibold truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
