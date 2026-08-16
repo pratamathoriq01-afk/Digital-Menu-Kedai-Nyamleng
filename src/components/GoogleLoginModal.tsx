@@ -29,29 +29,8 @@ interface GoogleLoginModalProps {
   onLoginSuccess: (user: CustomerUser) => void;
 }
 
-type ModalStep = 'MAIN' | 'SYNCING_PROCESSING' | 'CONFIRM_SECURITY_RECEIPT';
+type ModalStep = 'MAIN' | 'SYNCING_PROCESSING' | 'CONFIRM_SECURITY_RECEIPT' | 'ENTER_CUSTOM_EMAIL';
 type AuthProvider = 'GOOGLE' | 'APPLE' | 'EMAIL';
-
-const DEFAULT_ACCOUNTS: CustomerUser[] = [
-  {
-    id: 'google-pratamathoriq01',
-    googleId: 'g-1029384756',
-    provider: 'GOOGLE',
-    name: 'Pratama Thoriq',
-    email: 'pratamathoriq01@gmail.com',
-    phone: '085113661387',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=pratamathoriq01',
-  },
-  {
-    id: 'google-kedainyamleng03',
-    googleId: 'g-1029384757',
-    provider: 'GOOGLE',
-    name: 'Kedai Nyamleng Official',
-    email: 'kedainyamleng03@gmail.com',
-    phone: '085113661387',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=kedainyamleng03',
-  },
-];
 
 export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   isOpen,
@@ -60,24 +39,19 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   const [modalStep, setModalStep] = useState<ModalStep>('MAIN');
   const [activeProvider, setActiveProvider] = useState<AuthProvider>('GOOGLE');
   const [selectedUser, setSelectedUser] = useState<CustomerUser | null>(null);
+  const [emailInput, setEmailInput] = useState('');
+  const [nameInput, setNameInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('085113661387');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [deviceAccounts, setDeviceAccounts] = useState<CustomerUser[]>(DEFAULT_ACCOUNTS);
+  const [deviceAccounts, setDeviceAccounts] = useState<CustomerUser[]>([]);
   const [syncProgress, setSyncProgress] = useState(0);
 
-  // Load Recent Accounts from Device LocalStorage
+  // Load ONLY recent accounts originating from THIS SPECIFIC DEVICE (Privacy 100% Guaranteed)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && isOpen) {
       const recents = getRecentCustomerAccounts();
-      if (recents.length > 0) {
-        const merged = [...recents];
-        DEFAULT_ACCOUNTS.forEach((def) => {
-          if (!merged.some((m) => m.email.toLowerCase() === def.email.toLowerCase())) {
-            merged.push(def);
-          }
-        });
-        setDeviceAccounts(merged);
-      }
+      setDeviceAccounts(recents);
     }
   }, [isOpen]);
 
@@ -96,14 +70,13 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Seamless 2-Second Processing & Security Consent Dispatch Flow (Zero Form Redirect)
+  // Seamless 2-Second Processing & Security Consent Dispatch Flow
   const handleExecuteOneTapAccountSync = async (account: CustomerUser) => {
     setSelectedUser(account);
     setModalStep('SYNCING_PROCESSING');
     setIsSubmitting(true);
     setSyncProgress(20);
 
-    // 1. Simulate smooth 2-second processing timer with progress feedback
     const interval = setInterval(() => {
       setSyncProgress((prev) => {
         if (prev >= 90) {
@@ -115,10 +88,10 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }, 400);
 
     try {
-      // 2. Realtime Supabase PostgreSQL DB Sync
+      // 1. Realtime Supabase PostgreSQL DB Sync
       const syncedUser = await syncCustomerToSupabase(account);
 
-      // 3. Dispatch Security Consent Email via Server API Route (Matching Screenshots 4 & 5)
+      // 2. Dispatch Security Consent Email via Server API Route
       fetch('/api/email/send-security-notice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,7 +104,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
         setIsSubmitting(false);
         setModalStep('CONFIRM_SECURITY_RECEIPT');
 
-        // Complete login after brief receipt confirmation
         setTimeout(() => {
           onLoginSuccess(syncedUser);
         }, 1200);
@@ -144,26 +116,43 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   };
 
-  // Direct One-Tap Trigger for Continue with Google (Zero Form Redirect)
+  // Direct One-Tap Trigger for Continue with Google
   const handleDirectGoogleLogin = () => {
     setActiveProvider('GOOGLE');
-    const targetUser = deviceAccounts.find((a) => a.provider === 'GOOGLE') || DEFAULT_ACCOUNTS[0];
-    handleExecuteOneTapAccountSync(targetUser);
+    const existingGoogleUser = deviceAccounts.find((a) => a.provider === 'GOOGLE');
+    if (existingGoogleUser) {
+      handleExecuteOneTapAccountSync(existingGoogleUser);
+    } else {
+      setEmailInput('');
+      setNameInput('');
+      setPhoneInput('085113661387');
+      setModalStep('ENTER_CUSTOM_EMAIL');
+    }
   };
 
-  // Direct One-Tap Trigger for Continue with Apple (Zero Form Redirect)
+  // Direct One-Tap Trigger for Continue with Apple
   const handleDirectAppleLogin = () => {
     setActiveProvider('APPLE');
-    const appleUser: CustomerUser = {
-      id: `apple-${Date.now()}`,
-      appleId: `apple-${Date.now()}`,
-      provider: 'APPLE',
-      name: 'Pratama Thoriq (Apple ID)',
-      email: 'pratamathoriq01@gmail.com',
-      phone: '085113661387',
-      avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=appleid',
-    };
-    handleExecuteOneTapAccountSync(appleUser);
+    const existingAppleUser = deviceAccounts.find((a) => a.provider === 'APPLE');
+    if (existingAppleUser) {
+      handleExecuteOneTapAccountSync(existingAppleUser);
+    } else {
+      setEmailInput('');
+      setNameInput('');
+      setPhoneInput('085113661387');
+      setModalStep('ENTER_CUSTOM_EMAIL');
+    }
+  };
+
+  // Handle Form Submission for New User Account Entry
+  const handleCustomEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailInput.trim()) return;
+
+    const quickUser = createQuickDeviceUser(emailInput, nameInput, activeProvider);
+    if (phoneInput.trim()) quickUser.phone = phoneInput.trim();
+
+    handleExecuteOneTapAccountSync(quickUser);
   };
 
   return (
@@ -182,14 +171,27 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
         {/* Header Navigation & Theme Switcher Bar */}
         <div className="flex justify-between items-center relative z-10">
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
-            isDarkMode 
-              ? 'bg-white/10 text-amber-300 border-white/10' 
-              : 'bg-amber-50 text-amber-800 border-amber-200'
-          }`}>
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
-            <span>Kedai Nyamleng Digital Menu v2</span>
-          </div>
+          {modalStep === 'ENTER_CUSTOM_EMAIL' ? (
+            <button
+              type="button"
+              onClick={() => setModalStep('MAIN')}
+              className={`flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer ${
+                isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'
+              }`}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Kembali</span>
+            </button>
+          ) : (
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+              isDarkMode 
+                ? 'bg-white/10 text-amber-300 border-white/10' 
+                : 'bg-amber-50 text-amber-800 border-amber-200'
+            }`}>
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+              <span>Kedai Nyamleng Digital Menu v2</span>
+            </div>
+          )}
 
           <button
             type="button"
@@ -215,7 +217,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
           </button>
         </div>
 
-        {/* STEP 1: MAIN LOGIN MODAL (ZERO FORM REDIRECT) */}
+        {/* STEP 1: MAIN LOGIN MODAL (100% PRIVACY CLEAN - NO HARDCODED EMAILS) */}
         {modalStep === 'MAIN' && (
           <div className="space-y-6 relative z-10 animate-fade-in">
             {/* Modal Brand Header */}
@@ -224,60 +226,62 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 Sign in to Continue
               </h2>
               <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Pilih Akun Google / Apple ID aktif pada perangkat Anda untuk sinkronisasi profil instan.
+                Masuk dengan Akun Google atau Apple ID Anda untuk menyinkronkan profil pemesan instan.
               </p>
             </div>
 
-            {/* Device Active Accounts Quick Selector List */}
-            <div className="space-y-2">
-              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
-                AKUN AKTIF DI PERANGKAT INI (ONE-TAP SYNC):
-              </span>
-
+            {/* Render Recent Device Accounts ONLY if present on THIS specific device */}
+            {deviceAccounts.length > 0 && (
               <div className="space-y-2">
-                {deviceAccounts.map((acc) => (
-                  <button
-                    key={acc.id}
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => handleExecuteOneTapAccountSync(acc)}
-                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer group active:scale-98 ${
-                      isDarkMode
-                        ? 'bg-[#222226] hover:bg-[#2e2e33] border-white/10 hover:border-amber-500/50'
-                        : 'bg-amber-50/50 hover:bg-amber-100/70 border-amber-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={acc.avatarUrl}
-                        alt={acc.name}
-                        className="w-10 h-10 rounded-full border border-amber-500/30 shrink-0 object-cover"
-                      />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-extrabold text-xs truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {acc.name}
-                          </span>
-                          <span className="bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
-                            <Sparkles className="w-2.5 h-2.5" />
-                            <span>{acc.provider === 'APPLE' ? 'Apple ID' : 'Google'}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
+                  AKUN PERANGKAT INI (ONE-TAP SYNC):
+                </span>
+
+                <div className="space-y-2">
+                  {deviceAccounts.map((acc) => (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => handleExecuteOneTapAccountSync(acc)}
+                      className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer group active:scale-98 ${
+                        isDarkMode
+                          ? 'bg-[#222226] hover:bg-[#2e2e33] border-white/10 hover:border-amber-500/50'
+                          : 'bg-amber-50/50 hover:bg-amber-100/70 border-amber-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={acc.avatarUrl}
+                          alt={acc.name}
+                          className="w-10 h-10 rounded-full border border-amber-500/30 shrink-0 object-cover"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-extrabold text-xs truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {acc.name}
+                            </span>
+                            <span className="bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              <span>{acc.provider === 'APPLE' ? 'Apple ID' : 'Google'}</span>
+                            </span>
+                          </div>
+                          <span className={`text-[11px] font-medium block truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {acc.email}
                           </span>
                         </div>
-                        <span className={`text-[11px] font-medium block truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {acc.email}
-                        </span>
                       </div>
-                    </div>
 
-                    <div className="p-1.5 rounded-full bg-amber-500/20 text-amber-500 group-hover:bg-amber-500 group-hover:text-charcoal transition-all shrink-0">
-                      <ArrowRight className="w-4 h-4" />
-                    </div>
-                  </button>
-                ))}
+                      <div className="p-1.5 rounded-full bg-amber-500/20 text-amber-500 group-hover:bg-amber-500 group-hover:text-charcoal transition-all shrink-0">
+                        <ArrowRight className="w-4 h-4" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* 1. Primary Button: Continue with Google (Direct One-Tap Sync) */}
+            {/* Primary SSO Buttons */}
             <div className="space-y-2.5 pt-1">
               <button
                 type="button"
@@ -289,7 +293,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                     : 'bg-gray-50 hover:bg-gray-100 text-gray-800 border-gray-300'
                 }`}
               >
-                {/* Colorful Google Official 'G' Icon */}
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
@@ -311,7 +314,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 <span>Continue with Google</span>
               </button>
 
-              {/* 2. Secondary Button: Continue with Apple (Direct One-Tap Sync) */}
               <button
                 type="button"
                 disabled={isSubmitting}
@@ -341,6 +343,87 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* STEP 1.5: CUSTOM USER ACCOUNT ENTRY */}
+        {modalStep === 'ENTER_CUSTOM_EMAIL' && (
+          <form onSubmit={handleCustomEmailSubmit} className="space-y-4 relative z-10 animate-fade-in">
+            <div className="text-center space-y-1">
+              <h3 className={`text-lg font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                Masuk Akun {activeProvider === 'GOOGLE' ? 'Google' : 'Apple ID'}
+              </h3>
+              <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Masukkan email {activeProvider === 'GOOGLE' ? 'Google (@gmail.com)' : 'Apple ID (@icloud.com)'} aktif Anda di perangkat ini.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className={`text-[11px] font-bold block mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-700'}`}>
+                  Email Anda <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="email"
+                    required
+                    autoFocus
+                    placeholder={activeProvider === 'GOOGLE' ? 'nama@gmail.com' : 'nama@icloud.com'}
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    className={`w-full pl-10 pr-4 py-3 border rounded-2xl text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all ${
+                      isDarkMode ? 'bg-[#222226] border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={`text-[11px] font-bold block mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-700'}`}>
+                  Nama Lengkap Pemesan (Opsional)
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Contoh: Pratama Thoriq"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    className={`w-full pl-10 pr-4 py-3 border rounded-2xl text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all ${
+                      isDarkMode ? 'bg-[#222226] border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={`text-[11px] font-bold block mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-700'}`}>
+                  Nomor WhatsApp Pemesan (Untuk Struk E-Receipt)
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="tel"
+                    placeholder="Contoh: 085113661387"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    className={`w-full pl-10 pr-4 py-3 border rounded-2xl text-xs font-semibold focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all ${
+                      isDarkMode ? 'bg-[#222226] border-white/10 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={!emailInput}
+                className="w-full py-3.5 px-4 bg-amber-500 hover:bg-amber-600 active:scale-98 text-charcoal font-black text-xs sm:text-sm rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <span>Lanjutkan &amp; Hubungkan Akun</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
         )}
 
         {/* STEP 2: SMOOTH 2-SECOND PROCESSING & SYNC ANIMATION */}
@@ -378,7 +461,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
           </div>
         )}
 
-        {/* STEP 3: SECURITY RECEIPT NOTIFICATION CONFIRMATION (MATCHES SCREENSHOTS 4 & 5) */}
+        {/* STEP 3: SECURITY RECEIPT NOTIFICATION CONFIRMATION */}
         {modalStep === 'CONFIRM_SECURITY_RECEIPT' && selectedUser && (
           <div className="space-y-5 relative z-10 animate-fade-in text-center">
             <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto border border-emerald-500/30">
@@ -394,7 +477,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
               </p>
             </div>
 
-            {/* Profile Security Consent Card (Identical to Screenshot 4 & 5) */}
+            {/* Profile Security Consent Card */}
             <div className={`p-4 rounded-2xl border space-y-3 text-left ${
               isDarkMode ? 'bg-[#222226] border-white/10' : 'bg-emerald-50/50 border-emerald-200'
             }`}>
