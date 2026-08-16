@@ -1,9 +1,111 @@
 import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
 import { OFFICIAL_STORE_EMAIL, OrderPayload } from '@/types/pos';
+import { CustomerUser } from '@/services/authService';
 
 const getStoreResendKey = () => 
   process.env.RESEND_API_KEY || ['re', 'Tsgte4fB', 'PwdiNjNWD6ikmdG1HttUA7Kd'].join('_');
+
+export const generateSecurityConsentEmailHTML = (user: CustomerUser): string => {
+  const formattedDate = new Date().toLocaleDateString('id-ID', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const providerName = user.provider === 'APPLE' ? 'Apple ID (iOS)' : 'Google';
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Notifikasi Keamanan Akun - Kedai Nyamleng</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #111113; color: #e4e4e7; margin: 0; padding: 24px;">
+        <div style="max-width: 460px; margin: 0 auto; background-color: #1c1c1f; border-radius: 20px; padding: 24px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+          
+          <!-- Security Shield Header -->
+          <div style="text-align: center; margin-bottom: 20px;">
+            <div style="width: 56px; height: 56px; background-color: rgba(245, 158, 11, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto; border: 1px solid rgba(245, 158, 11, 0.3);">
+              <span style="font-size: 24px;">🛡️</span>
+            </div>
+            <h2 style="font-size: 18px; font-weight: 800; color: #ffffff; margin: 0 0 4px 0;">
+              digital-menu-kedai-nyamleng.vercel.app menerima info profil ini
+            </h2>
+            <p style="font-size: 12px; color: #a1a1aa; margin: 0;">
+              Notifikasi Keamanan & Pembagian Informasi Profil (${providerName})
+            </p>
+          </div>
+
+          <!-- User Info Box (Matches Screenshot 4) -->
+          <div style="background-color: #27272a; border-radius: 14px; padding: 16px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.08);">
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 11px; font-weight: bold; color: #a1a1aa; uppercase; tracking-wider;">Nama dan Foto Profil</div>
+              <div style="font-size: 15px; font-weight: 800; color: #ffffff; margin-top: 2px;">
+                ${user.name}
+              </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 11px; font-weight: bold; color: #a1a1aa; uppercase; tracking-wider;">Alamat Email</div>
+              <div style="font-size: 14px; font-weight: 600; color: #f59e0b; margin-top: 2px;">
+                ${user.email}
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size: 11px; font-weight: bold; color: #a1a1aa; uppercase; tracking-wider;">Nomor WhatsApp Perangkat</div>
+              <div style="font-size: 13px; font-weight: 600; color: #10b981; margin-top: 2px;">
+                ${user.phone || '085113661387'}
+              </div>
+            </div>
+
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: 14px; padding-top: 10px; font-size: 11px; color: #a1a1aa;">
+              Email ini berisi info yang Anda bagikan pada <strong>${formattedDate}</strong>
+            </div>
+          </div>
+
+          <!-- Security Statement Box (Matches Screenshot 5) -->
+          <div style="background-color: #1e293b; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 12px 14px; margin-bottom: 20px; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+            Kami mengirimkan email ini karena Anda menggunakan Login dengan ${providerName} untuk masuk ke <strong>digital-menu-kedai-nyamleng.vercel.app</strong>. Email ini merangkum info yang Anda bagikan. Anda tidak perlu melakukan tindakan apa pun saat ini.
+          </div>
+
+          <!-- Footer Branding -->
+          <div style="text-align: center; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px; font-size: 11px; color: #71717a;">
+            Kedai Nyamleng Malang • Terlindungi dengan Supabase Enterprise RLS
+          </div>
+
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+export const sendSecurityConsentEmail = async (user: CustomerUser) => {
+  const htmlContent = generateSecurityConsentEmailHTML(user);
+  const providerName = user.provider === 'APPLE' ? 'Apple ID' : 'Google';
+  const subject = `[Keamanan] Pembagian Informasi Profil ${providerName} ke Kedai Nyamleng Digital`;
+  const apiKey = getStoreResendKey().trim().replace(/^["']|["']$/g, '');
+  const recipientEmail = (user.email || OFFICIAL_STORE_EMAIL).trim();
+
+  try {
+    if (apiKey && apiKey.startsWith('re_')) {
+      const resend = new Resend(apiKey);
+      await resend.emails.send({
+        from: `Kedai Nyamleng Security <onboarding@resend.dev>`,
+        to: [recipientEmail],
+        subject,
+        html: htmlContent,
+      }).catch((e) => console.warn('[Security Email Resend Notice]:', e.message));
+    }
+  } catch (e: any) {
+    console.warn('[Security Email Dispatch Notice]:', e?.message || e);
+  }
+};
 
 export const generateEmailHTML = (order: OrderPayload): string => {
   const formatRupiah = (val: number) =>
