@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleTokensFromCode, parseGoogleOAuthError, oauth2Client } from '@/lib/googleOAuth';
+import { getGoogleTokensFromCode, parseGoogleOAuthError, oauth2Client, checkGrantedOAuthScopes } from '@/lib/googleOAuth';
 import { google } from 'googleapis';
 import { syncCustomerToSupabase, createQuickDeviceUser } from '@/services/authService';
 
@@ -38,6 +38,10 @@ export async function GET(req: NextRequest) {
     try {
       tokens = await getGoogleTokensFromCode(code);
       console.log('[Google OAuth Callback] Tokens exchange successful. Access Token:', !!tokens.access_token);
+      
+      // 5. Check which scopes were granted by the user
+      const grantedScopes = checkGrantedOAuthScopes(tokens);
+      console.log('[Google OAuth Granted Scopes Check]:', grantedScopes);
     } catch (exchangeErr: any) {
       const googleErrCode = exchangeErr?.response?.data?.error || exchangeErr?.message || 'invalid_grant';
       console.error('[Google OAuth Token Exchange Error]:', googleErrCode);
@@ -45,11 +49,10 @@ export async function GET(req: NextRequest) {
       const diagnostic = parseGoogleOAuthError(googleErrCode.includes('invalid_grant') ? 'invalid_grant' : googleErrCode);
       console.error('[Token Exchange Error Diagnostic]:', diagnostic);
 
-      // Redirect user back to restart OAuth consent flow cleanly
       return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(diagnostic.code)}`, req.url));
     }
 
-    // 5. Fetch Google User Profile info (name, email, picture) using googleapis userinfo
+    // 6. Fetch Google User Profile info (name, email, picture) using googleapis userinfo
     try {
       const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
       const { data: googleProfile } = await oauth2.userinfo.get();

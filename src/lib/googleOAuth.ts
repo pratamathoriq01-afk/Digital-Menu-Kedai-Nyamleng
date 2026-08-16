@@ -28,6 +28,30 @@ export const defaultScopes = [
 ];
 
 /**
+ * Check if a specific scope has been granted in tokens.scope
+ */
+export const hasGrantedScope = (grantedScopes: string | string[] | undefined, targetScope: string): boolean => {
+  if (!grantedScopes) return false;
+  if (Array.isArray(grantedScopes)) {
+    return grantedScopes.includes(targetScope);
+  }
+  return grantedScopes.split(' ').includes(targetScope);
+};
+
+/**
+ * Verify granted scopes for profile and email
+ */
+export const checkGrantedOAuthScopes = (tokens: Credentials) => {
+  const scopeStr = tokens.scope || '';
+  return {
+    hasProfile: hasGrantedScope(scopeStr, 'https://www.googleapis.com/auth/userinfo.profile'),
+    hasEmail: hasGrantedScope(scopeStr, 'https://www.googleapis.com/auth/userinfo.email'),
+    hasOpenId: hasGrantedScope(scopeStr, 'openid'),
+    rawScopes: scopeStr
+  };
+};
+
+/**
  * Generate a secure 32-byte hex random state string to mitigate CSRF attacks
  */
 export const generateOAuthState = (): string => {
