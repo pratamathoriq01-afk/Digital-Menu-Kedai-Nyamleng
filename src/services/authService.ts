@@ -165,6 +165,27 @@ export const signInWithSupabaseSSOAuth = async (
   }
 };
 
+export const getSupabaseUserClaims = async () => {
+  try {
+    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr || !sessionData?.session) {
+      return { data: null, error: sessionErr || new Error('No active Supabase session') };
+    }
+    const user = sessionData.session.user;
+    const claims = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      aud: user.aud,
+      app_metadata: user.app_metadata,
+      user_metadata: user.user_metadata,
+    };
+    return { data: claims, error: null };
+  } catch (err) {
+    return { data: null, error: err };
+  }
+};
+
 export const handleSupabaseLogout = async (): Promise<void> => {
   if (typeof window === 'undefined') return;
   try {
