@@ -92,6 +92,13 @@ export const parseGoogleOAuthError = (errorCode: string): GoogleOAuthErrorDiagno
   const code = errorCode.toLowerCase().trim();
 
   switch (code) {
+    case 'access_denied':
+      return {
+        code: 'access_denied',
+        title: 'Akses Ditolak oleh Pengguna',
+        description: 'Pengguna memilih membatalkan atau menolak izin otorisasi pada layar Google Consent.',
+        resolution: 'Tampilkan notifikasi di UI bahwa izin otorisasi diperlukan untuk melanjutkan login.'
+      };
     case 'redirect_uri_mismatch':
       return {
         code: 'redirect_uri_mismatch',
@@ -104,7 +111,7 @@ export const parseGoogleOAuthError = (errorCode: string): GoogleOAuthErrorDiagno
         code: 'disallowed_useragent',
         title: 'Embedded WebView Tidak Diizinkan',
         description: 'Google menolak otorisasi OAuth dari browser WebView yang tertanam (misal WebView aplikasi internal iOS WKWebView).',
-        resolution: 'Buka link otorisasi di browser default sistem operasi (Chrome, Safari, SFSafariViewController).'
+        resolution: 'Alihkan otorisasi untuk membuka browser default sistem operasi (Chrome/Safari).'
       };
     case 'invalid_client':
       return {

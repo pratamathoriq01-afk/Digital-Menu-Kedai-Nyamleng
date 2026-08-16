@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleTokensFromCode } from '@/lib/googleOAuth';
+import { getGoogleTokensFromCode, parseGoogleOAuthError } from '@/lib/googleOAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,8 +10,12 @@ export async function GET(req: NextRequest) {
     const error = searchParams.get('error');
 
     if (error) {
-      console.warn('[Google OAuth Callback Error]:', error);
-      return NextResponse.redirect(new URL('/', req.url));
+      console.warn('[Google OAuth Callback Error Detected]:', error);
+      const diagnostic = parseGoogleOAuthError(error);
+      console.warn('[Google OAuth Error Diagnostic]:', diagnostic);
+      
+      // Redirect back to main page with specific auth_error parameter
+      return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(error)}`, req.url));
     }
 
     if (!code) {
@@ -25,6 +29,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL('/?login_success=true', req.url));
   } catch (err: any) {
     console.error('[Google OAuth Callback Exception]:', err);
-    return NextResponse.redirect(new URL('/', req.url));
+    return NextResponse.redirect(new URL('/?auth_error=exception', req.url));
   }
 }
