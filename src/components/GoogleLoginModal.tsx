@@ -85,9 +85,15 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     setErrorMessage(null);
 
     try {
-      const redirectUrl = typeof window !== 'undefined' 
-        ? `${window.location.origin}/api/auth/google/callback` 
-        : 'https://digital-menu-kedai-nyamleng.vercel.app/api/auth/google/callback';
+      // Direct Next.js OAuth Server Redirect to trigger custom server OAuth flow
+      if (typeof window !== 'undefined' && window) {
+        (window as any).location.href = '/api/auth/google/redirect';
+        return;
+      }
+
+      const redirectUrl = typeof window !== 'undefined' && window
+        ? `${(window as any).location.origin}/` 
+        : 'https://digital-menu-kedai-nyamleng.vercel.app/';
 
       // Layer 1: Attempt official Supabase OAuth Sign In
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -103,9 +109,8 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
 
       if (error) {
         console.warn('[Supabase Google OAuth Provider Notice]:', error.message);
-        // Layer 2: Direct Next.js OAuth Server Redirect / Inline Sheet
-        if (typeof window !== 'undefined') {
-          window.location.href = '/api/auth/google/redirect';
+        if (typeof window !== 'undefined' && window) {
+          (window as any).location.href = '/api/auth/google/redirect';
         } else {
           setIsSubmitting(false);
           setStepMode('GOOGLE_ACCOUNT_CHOOSER');
@@ -113,8 +118,8 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
       }
     } catch (err) {
       console.error('[Google OAuth Click Exception]:', err);
-      if (typeof window !== 'undefined') {
-        window.location.href = '/api/auth/google/redirect';
+      if (typeof window !== 'undefined' && window) {
+        (window as any).location.href = '/api/auth/google/redirect';
       } else {
         setIsSubmitting(false);
         setStepMode('GOOGLE_ACCOUNT_CHOOSER');

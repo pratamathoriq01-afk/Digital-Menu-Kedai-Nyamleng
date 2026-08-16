@@ -6,7 +6,6 @@ import {
   fetchGoogleDriveFiles,
   fetchGoogleCalendarEvents 
 } from '@/lib/googleOAuth';
-import { google } from 'googleapis';
 import { syncCustomerToSupabase, createQuickDeviceUser } from '@/services/authService';
 import { createClient } from '@supabase/supabase-js';
 
@@ -28,7 +27,7 @@ export async function GET(request: NextRequest) {
     const error = searchParams.get('error');
     const state = searchParams.get('state');
 
-    // 1. Handle Error Response from Google consent (e.g. error=access_denied or error=redirect_uri_mismatch)
+    // 1. Handle Error Response from Google consent (e.g. error=access_denied)
     if (error) {
       console.warn('[Google OAuth Callback Error Detected]:', error);
       const diagnostic = parseGoogleOAuthError(error);
@@ -37,14 +36,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL(`/?auth_error=${encodeURIComponent(error)}`, origin));
     }
 
-    // 2. CSRF State Verification
-    if (state) {
-      console.log('[Google OAuth Callback] Received CSRF State Token:', state);
+    // 2. If code is missing (e.g. redirected by Supabase OAuth flow or direct access), redirect safely to home
+    if (!code) {
+      console.log('[Google OAuth Callback Notice]: No code parameter in query string. Redirecting to home catalog.');
+      return NextResponse.redirect(new URL('/?login_success=true', origin));
     }
 
-    // 3. Validate missing authorization code
-    if (!code) {
-      return NextResponse.json({ error: 'Auth code tidak ditemukan' }, { status: 400 });
+    // 3. CSRF State Verification
+    if (state) {
+      console.log('[Google OAuth Callback] Received CSRF State Token:', state);
     }
 
     // 4. Tukar code dengan token Google menggunakan dynamic origin
