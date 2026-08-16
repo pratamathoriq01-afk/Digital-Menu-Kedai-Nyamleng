@@ -165,6 +165,10 @@ export const signInWithSupabaseSSOAuth = async (
   }
 };
 
+export const getActiveSupabaseSession = async () => {
+  return await supabase.auth.getSession();
+};
+
 export const getSupabaseUserClaims = async () => {
   try {
     const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
