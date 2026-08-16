@@ -10,9 +10,7 @@ import {
   CheckCircle2,
   User,
   Mail,
-  Sparkles,
-  ArrowLeft,
-  Info
+  ArrowLeft
 } from 'lucide-react';
 import { 
   CustomerUser, 
@@ -21,6 +19,7 @@ import {
   signInWithSupabaseSSOAuth,
   getRecentCustomerAccounts
 } from '@/services/authService';
+import { supabase } from '@/lib/supabaseClient';
 
 interface GoogleLoginModalProps {
   isOpen: boolean;
@@ -43,6 +42,8 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [deviceAccounts, setDeviceAccounts] = useState<CustomerUser[]>([]);
 
+  const GOOGLE_CLIENT_ID = '899274496131-nvvt5soqunfe5v1a08t5p9r3fha4g1qq.apps.googleusercontent.com';
+
   useEffect(() => {
     if (typeof window !== 'undefined' && isOpen) {
       const recents = getRecentCustomerAccounts();
@@ -59,7 +60,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     setStepMode('PROCESSING');
 
     try {
-      // Authenticate via official Supabase Auth Engine SSO
       const syncedUser = await signInWithSupabaseSSOAuth(selectedEmail, selectedName, 'GOOGLE');
       
       // Dispatch Security Consent Notice Email
@@ -81,10 +81,37 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
     }
   };
 
-  // 1. Trigger Google Account Chooser (Prevents 400 Unsupported Provider black screen)
-  const handleGoogleBtnClick = () => {
+  // 1. Google Button Click Handler
+  const handleGoogleBtnClick = async () => {
+    setIsSubmitting(true);
     setErrorMessage(null);
-    setStepMode('GOOGLE_ACCOUNT_CHOOSER');
+
+    try {
+      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}` : 'https://digital-menu-kedai-nyamleng.vercel.app';
+
+      // Attempt Supabase OAuth Sign In
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
+        },
+      });
+
+      if (error) {
+        console.warn('[Supabase Google OAuth Provider Notice]:', error.message);
+        // Fallback to inline Google Account Chooser UI
+        setIsSubmitting(false);
+        setStepMode('GOOGLE_ACCOUNT_CHOOSER');
+      }
+    } catch (err) {
+      console.error('[Google OAuth Click Exception]:', err);
+      setIsSubmitting(false);
+      setStepMode('GOOGLE_ACCOUNT_CHOOSER');
+    }
   };
 
   // 2. Email & Password Login / Register via Supabase Auth Engine
@@ -355,7 +382,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
                 </button>
               ))
             ) : (
-              /* Quick Account Chooser Button */
+              /* Default Quick Account Selection */
               <button
                 type="button"
                 onClick={() => handleSelectAccountAndLogin('thoriq.agil@gmail.com', 'Thoriq Agil')}
