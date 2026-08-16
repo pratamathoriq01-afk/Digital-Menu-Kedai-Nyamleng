@@ -20,23 +20,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Helper Async Dispatcher function (Runs in background without blocking Meta HTTP response)
-async function handleAsyncAiReply(fromNumber: string, incomingText: string) {
-  try {
-    console.log(`[WhatsApp AI Agent Background Task] Processing message from ${fromNumber}: "${incomingText}"`);
-    
-    // 1. Generate OpenAI GPT-4o-mini CS Reply
-    const botReply = await processAIWhatsAppBotMessageAsync(incomingText, fromNumber);
-    console.log(`[WhatsApp AI Agent Background Task] Reply generated for ${fromNumber}:\n${botReply}`);
-
-    // 2. Dispatch Reply via Meta WhatsApp Cloud API
-    const dispatchResult = await sendMetaWhatsAppMessage(fromNumber, botReply);
-    console.log(`[WhatsApp AI Agent Background Task] Meta API Dispatch Result:`, dispatchResult);
-  } catch (err) {
-    console.error('[WhatsApp AI Agent Background Task Error]:', err);
-  }
-}
-
 // POST Handler: Menerima event pesan masuk dari Meta WhatsApp Cloud API
 export async function POST(request: NextRequest) {
   try {
@@ -53,22 +36,35 @@ export async function POST(request: NextRequest) {
       const fromNumber = message.from;
       const text = message.text?.body || '';
 
-      // Trigger background processing asynchronously (Non-blocking)
-      handleAsyncAiReply(fromNumber, text);
+      console.log(`[WhatsApp Webhook AI Processing] Incoming message from ${fromNumber}: "${text}"`);
 
-      // Return 200 OK IMMEDIATELY to Meta in < 50ms to prevent Meta Webhook Timeout
+      // 1. Generate OpenAI GPT-4o-mini CS Reply (Awaited for Vercel Serverless Function Execution)
+      const botReply = await processAIWhatsAppBotMessageAsync(text, fromNumber);
+      console.log(`[WhatsApp Webhook AI Processing] Generated Reply for ${fromNumber}:\n${botReply}`);
+
+      // 2. Dispatch Reply via Meta WhatsApp Cloud API (Awaited for Vercel Serverless Function Execution)
+      const dispatchResult = await sendMetaWhatsAppMessage(fromNumber, botReply);
+      console.log(`[WhatsApp Webhook AI Processing] Meta Graph API Dispatch Result:`, dispatchResult);
+
+      // Return 200 OK after full execution completion (~1.2s total)
       return NextResponse.json(
-        { success: true, status: 'EVENT_RECEIVED', recipient: fromNumber },
+        { 
+          success: true, 
+          status: 'EVENT_PROCESSED', 
+          recipient: fromNumber, 
+          incomingMessage: text,
+          replyMessage: botReply, 
+          dispatchResult 
+        },
         { status: 200 }
       );
     }
 
-    // Direct JSON message simulation support (For local developer testing)
+    // Direct JSON message simulation support (For local developer & testing)
     if (body.message && body.from) {
       const fromNumber = body.from;
       const text = body.message;
 
-      // For direct developer simulation requests, execute & return full result
       const botReply = await processAIWhatsAppBotMessageAsync(text, fromNumber);
       const dispatchResult = await sendMetaWhatsAppMessage(fromNumber, botReply);
 
