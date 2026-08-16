@@ -5,9 +5,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
+    const origin = req.headers.get('origin') || new URL(req.url).origin;
     const state = generateOAuthState();
-    const authorizationUrl = generateGoogleAuthorizationUrl(undefined, state);
+    const authorizationUrl = generateGoogleAuthorizationUrl(undefined, state, undefined, origin);
 
+    console.log('[Google OAuth Redirect] Request Origin:', origin);
     console.log('[Google OAuth Redirect] Redirecting user to:', authorizationUrl);
     
     // Redirect browser directly to Google OAuth Authorization URL

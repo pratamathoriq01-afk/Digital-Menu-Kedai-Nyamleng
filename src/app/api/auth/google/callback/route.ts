@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { 
   getGoogleTokensFromCode, 
   parseGoogleOAuthError, 
-  oauth2Client, 
   checkGrantedOAuthScopes,
   fetchGoogleDriveFiles,
   fetchGoogleCalendarEvents 
@@ -14,12 +13,13 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
+    const origin = req.headers.get('origin') || new URL(req.url).origin;
     const { searchParams } = new URL(req.url);
     const code = searchParams.get('code');
     const error = searchParams.get('error');
     const state = searchParams.get('state');
 
-    // 1. Handle Error Response from Google consent (e.g. error=access_denied)
+    // 1. Handle Error Response from Google consent (e.g. error=access_denied or error=redirect_uri_mismatch)
     if (error) {
       console.warn('[Google OAuth Callback Error Detected]:', error);
       const diagnostic = parseGoogleOAuthError(error);
@@ -38,12 +38,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing authorization code' }, { status: 400 });
     }
 
-    // 4. Exchange code for access & refresh tokens (access_type=offline)
-    console.log('[Google OAuth Callback] Exchanging code for tokens:', code);
+    // 4. Exchange code for access & refresh tokens (access_type=offline) with dynamic origin client
+    console.log('[Google OAuth Callback] Exchanging code for tokens with origin:', origin);
     
     let tokens;
+    let client;
     try {
-      tokens = await getGoogleTokensFromCode(code);
+      const res = await getGoogleTokensFromCode(code, origin);
+      tokens = res.tokens;
+      client = res.client;
       console.log('[Google OAuth Callback] Tokens exchange successful. Access Token:', !!tokens.access_token);
       
       // 5. Check which scopes were granted by the user (Drive / Calendar / Profile)
@@ -54,7 +57,7 @@ export async function GET(req: NextRequest) {
       if (grantedScopes.hasDriveReadonly) {
         console.log('[Drive Scope Granted]: Listing files...');
         try {
-          const driveFiles = await fetchGoogleDriveFiles();
+          const driveFiles = await fetchGoogleDriveFiles(client);
           console.log(`[Drive Files Count]: ${driveFiles.length} file(s) found.`);
         } catch (driveErr) {
           console.warn('[Drive API Fetch Notice]:', driveErr);
@@ -65,7 +68,7 @@ export async function GET(req: NextRequest) {
       if (grantedScopes.hasCalendarReadonly) {
         console.log('[Calendar Scope Granted]: Fetching upcoming events...');
         try {
-          const calendarEvents = await fetchGoogleCalendarEvents();
+          const calendarEvents = await fetchGoogleCalendarEvents(client);
           console.log(`[Calendar Events Count]: ${calendarEvents.length} event(s) found.`);
         } catch (calErr) {
           console.warn('[Calendar API Fetch Notice]:', calErr);
@@ -83,7 +86,7 @@ export async function GET(req: NextRequest) {
 
     // 6. Fetch Google User Profile info (name, email, picture) using googleapis userinfo
     try {
-      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client as any });
+      const oauth2 = google.oauth2({ version: 'v2', auth: client as any });
       const { data: googleProfile } = await oauth2.userinfo.get();
       
       if (googleProfile && googleProfile.email) {
