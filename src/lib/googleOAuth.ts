@@ -91,26 +91,37 @@ export const generateOAuthState = (): string => {
 };
 
 /**
- * 4. Generate Google OAuth Authorization URL with offline access, incremental scopes, and CSRF state token
+ * 4. Generate Google OAuth Authorization URL with offline access, incremental scopes, CSRF state token, and optional login_hint
  */
-export const generateGoogleAuthorizationUrl = (customScopes?: string[], state?: string) => {
+export const generateGoogleAuthorizationUrl = (
+  customScopes?: string[], 
+  state?: string, 
+  loginHint?: string
+) => {
   const oauthState = state || generateOAuthState();
 
-  return oauth2Client.generateAuthUrl({
+  const options: any = {
     access_type: 'offline',
     scope: customScopes || defaultScopes,
     include_granted_scopes: true,
     state: oauthState,
-    prompt: 'select_account'
-  });
+    prompt: 'select_account',
+    enable_granular_consent: true,
+  };
+
+  if (loginHint) {
+    options.login_hint = loginHint;
+  }
+
+  return oauth2Client.generateAuthUrl(options);
 };
 
 /**
  * 5. Incremental Authorization Helper: Requests additional scopes dynamically while preserving combined permissions
  */
-export const generateIncrementalAuthUrl = (additionalScopes: string[], state?: string) => {
+export const generateIncrementalAuthUrl = (additionalScopes: string[], state?: string, loginHint?: string) => {
   const combinedScopes = Array.from(new Set([...defaultScopes, ...additionalScopes]));
-  return generateGoogleAuthorizationUrl(combinedScopes, state);
+  return generateGoogleAuthorizationUrl(combinedScopes, state, loginHint);
 };
 
 /**
