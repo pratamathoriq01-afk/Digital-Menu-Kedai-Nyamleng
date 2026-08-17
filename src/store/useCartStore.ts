@@ -15,7 +15,7 @@ import {
 } from '@/types/pos';
 import { MOCK_MENU_ITEMS } from '@/data/mockMenu';
 import { createSupabaseTransaction } from '@/services/supabaseOrderService';
-import { fetchSupabaseMenuItems } from '@/services/supabaseMenuService';
+import { fetchSupabaseMenuItems, fetchSupabaseVouchers } from '@/services/supabaseMenuService';
 
 export const INITIAL_VOUCHERS: Voucher[] = [
   {
@@ -147,8 +147,15 @@ export const useCartStore = create<CartState>()(
       fetchMenuItems: async () => {
         set({ isLoadingMenu: true });
         try {
-          const items = await fetchSupabaseMenuItems();
-          set({ menuItems: items, isLoadingMenu: false });
+          const [items, vouchers] = await Promise.all([
+            fetchSupabaseMenuItems(),
+            fetchSupabaseVouchers(),
+          ]);
+          set({
+            menuItems: items,
+            availableVouchers: vouchers && vouchers.length > 0 ? vouchers : get().availableVouchers,
+            isLoadingMenu: false,
+          });
         } catch (e) {
           console.error('[fetchMenuItems error]:', e);
           set({ isLoadingMenu: false });
@@ -169,7 +176,17 @@ export const useCartStore = create<CartState>()(
         ...(orderPayload !== undefined ? { activeOrder: orderPayload } : {})
       })),
       setActiveOrder: (orderPayload) => set({ activeOrder: orderPayload }),
-      toggleVoucherModal: (isOpen) => set((state) => ({ isVoucherModalOpen: isOpen ?? !state.isVoucherModalOpen })),
+      toggleVoucherModal: (isOpen) => {
+        const nextState = isOpen ?? !get().isVoucherModalOpen;
+        set({ isVoucherModalOpen: nextState });
+        if (nextState) {
+          fetchSupabaseVouchers().then((vouchers) => {
+            if (vouchers && Array.isArray(vouchers)) {
+              set({ availableVouchers: vouchers });
+            }
+          }).catch((err) => console.warn('[Vouchers Fetch Error]:', err));
+        }
+      },
 
       addToCart: (menuItem, selectedVariants = [], selectedAddOns = [], itemNotes = '', quantity = 1) => {
         const variantExtra = selectedVariants.reduce((acc, v) => acc + v.priceModifier, 0);

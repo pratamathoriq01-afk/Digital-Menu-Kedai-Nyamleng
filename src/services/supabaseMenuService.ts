@@ -47,3 +47,35 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
     return MOCK_MENU_ITEMS;
   }
 };
+
+
+export const fetchSupabaseVouchers = async (): Promise<any[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('Voucher')
+      .select('*')
+      .eq('isActive', true)
+      .order('createdAt', { ascending: false });
+
+    if (error || !data) {
+      console.warn('[Supabase Vouchers Fetch Error]:', error?.message);
+      return [];
+    }
+
+    return data.map((v: any) => ({
+      id: v.id,
+      code: String(v.code || '').trim().toUpperCase(),
+      title: v.title || v.code,
+      description: v.description || 'Voucher Promo Digital Kedai Nyamleng',
+      discountType: String(v.discountType || '').toUpperCase().includes('FIXED') ? 'FIXED' : 'PERCENTAGE',
+      discountValue: Number(v.discountValue || 0),
+      minSubtotal: Number(v.minSubtotal || 0),
+      maxDiscount: v.maxDiscount ? Number(v.maxDiscount) : undefined,
+      validUntil: v.validUntil || '2026-12-31',
+      isActive: v.isActive ?? true,
+    }));
+  } catch (err) {
+    console.error('[Supabase Vouchers Exception]:', err);
+    return [];
+  }
+};
