@@ -46,7 +46,11 @@ export default function GoogleAuthNextPage() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-400">Client ID Status:</span>
-            <span className="font-mono text-amber-300 text-[10px]">899274496131...apps</span>
+            <span className="font-mono text-amber-300 text-[10px]">
+              {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID 
+                ? `${process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID.slice(0, 12)}...` 
+                : 'Configured via ENV'}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-400">Access Scopes:</span>

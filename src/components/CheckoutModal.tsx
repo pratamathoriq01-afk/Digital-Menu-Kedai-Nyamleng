@@ -20,7 +20,7 @@ import {
   Lock
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
-import { DeliveryCourier } from '@/types/pos';
+import { DeliveryCourier, OFFICIAL_STORE_WA } from '@/types/pos';
 import { PromoVoucherModal } from './PromoVoucherModal';
 import { getStoredCustomerUser } from '@/services/authService';
 
@@ -220,14 +220,14 @@ export const CheckoutModal: React.FC = () => {
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-charcoal">
                     Nomor WhatsApp <span className="text-red-500">*</span>
-                    <span className="text-[10px] text-gray-500 font-normal ml-1">(Notifikasi Toko: 085113661387)</span>
+                    <span className="text-[10px] text-gray-500 font-normal ml-1">(Notifikasi Toko: {OFFICIAL_STORE_WA})</span>
                   </label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="tel"
                       required
-                      placeholder="Contoh: 085113661387"
+                      placeholder={`Contoh: ${OFFICIAL_STORE_WA}`}
                       value={phoneInput}
                       onChange={(e) => setPhoneInput(e.target.value)}
                       className="w-full pl-9 pr-8 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"

@@ -68,11 +68,13 @@ export const syncCustomerToSupabase = async (user: CustomerUser): Promise<Custom
       .eq('email', cleanEmail)
       .maybeSingle();
 
+    const defaultPhone = process.env.NEXT_PUBLIC_STORE_WA || '';
+
     if (existing) {
       console.log('[Supabase Sync] Existing Customer Profile Found:', existing);
       const merged: CustomerUser = {
         ...existing,
-        phone: user.phone || existing.phone || '085113661387',
+        phone: user.phone || existing.phone || defaultPhone,
         avatarUrl: user.avatarUrl || existing.avatarUrl,
         provider: user.provider || 'GOOGLE',
       };
@@ -85,7 +87,7 @@ export const syncCustomerToSupabase = async (user: CustomerUser): Promise<Custom
       googleId: user.googleId || `g-${Date.now()}`,
       name: user.name || cleanEmail.split('@')[0].replace(/[._-]/g, ' '),
       email: cleanEmail,
-      phone: user.phone || '085113661387',
+      phone: user.phone || defaultPhone,
       avatarUrl: user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanEmail)}`,
       createdAt: new Date().toISOString(),
     };
@@ -156,7 +158,7 @@ export const signInWithSupabaseSSOAuth = async (
       provider: provider,
       name: name || authResult.user?.user_metadata?.full_name || cleanEmail.split('@')[0].replace(/[._-]/g, ' '),
       email: cleanEmail,
-      phone: '085113661387',
+      phone: process.env.NEXT_PUBLIC_STORE_WA || '',
       avatarUrl: provider === 'APPLE'
         ? `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`
         : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanEmail)}`,
@@ -228,7 +230,7 @@ export const createQuickDeviceUser = (
     provider,
     name: capitalizedName,
     email: cleanEmail,
-    phone: '085113661387',
+    phone: process.env.NEXT_PUBLIC_STORE_WA || '',
     avatarUrl: provider === 'APPLE' 
       ? `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`
       : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanEmail)}`,

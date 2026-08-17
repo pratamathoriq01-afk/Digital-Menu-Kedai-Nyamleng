@@ -22,7 +22,7 @@ import { GoogleLoginModal } from '@/components/GoogleLoginModal';
 import { OrderHistoryDrawer } from '@/components/OrderHistoryDrawer';
 import { useCartStore } from '@/store/useCartStore';
 import { CustomerUser, getStoredCustomerUser, setStoredCustomerUser, syncCustomerToSupabase, handleSupabaseLogout } from '@/services/authService';
-import { MenuItem } from '@/types/pos';
+import { MenuItem, OFFICIAL_STORE_WA } from '@/types/pos';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function Home() {
@@ -71,7 +71,7 @@ export default function Home() {
           googleId: u.user_metadata?.sub || u.id,
           name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'Pelanggan Kedai',
           email: u.email || '',
-          phone: u.user_metadata?.phone || '085113661387',
+          phone: u.user_metadata?.phone || OFFICIAL_STORE_WA,
           avatarUrl: u.user_metadata?.avatar_url || u.user_metadata?.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.email || 'user')}`,
           provider: 'GOOGLE',
         };

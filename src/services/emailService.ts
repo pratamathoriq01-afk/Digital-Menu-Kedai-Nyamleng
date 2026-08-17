@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
-import { OFFICIAL_STORE_EMAIL, OrderPayload } from '@/types/pos';
+import { OrderPayload, OFFICIAL_STORE_WA, OFFICIAL_STORE_EMAIL, STORE_LOCATION } from '@/types/pos';
 import { CustomerUser } from '@/services/authService';
 
 const getStoreResendKey = () => 
@@ -60,7 +60,7 @@ export const generateSecurityConsentEmailHTML = (user: CustomerUser): string => 
             <div>
               <div style="font-size: 11px; font-weight: bold; color: #a1a1aa; uppercase; tracking-wider;">Nomor WhatsApp Perangkat</div>
               <div style="font-size: 13px; font-weight: 600; color: #10b981; margin-top: 2px;">
-                ${user.phone || '085113661387'}
+                ${user.phone || OFFICIAL_STORE_WA}
               </div>
             </div>
 
@@ -164,8 +164,8 @@ export const generateEmailHTML = (order: OrderPayload): string => {
           <div style="text-align: center; border-bottom: 2px dashed #e5e5e5; padding-bottom: 16px; margin-bottom: 16px;">
             <img src="https://raw.githubusercontent.com/pratamathoriq01-afk/Digital-Menu-Kedai-Nyamleng/main/public/images/kedai-nyamleng-logo.png" alt="Kedai Nyamleng Logo" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #e65100; margin-bottom: 6px; background-color: #ffffff;" />
             <h1 style="font-size: 20px; margin: 0; color: #e65100; font-weight: 900; letter-spacing: -0.5px;">KEDAI NYAMLENG MALANG</h1>
-            <p style="font-size: 11px; color: #666; margin: 4px 0 0 0;">Spesial Cita Rasa Malang • Kota Malang, Jawa Timur</p>
-            <p style="font-size: 11px; color: #666; margin: 2px 0 0 0;">WA Official: 085113661387 • Email: kedainyamleng03@gmail.com</p>
+            <p style="font-size: 11px; color: #666; margin: 4px 0 0 0;">Spesial Cita Rasa Malang • ${STORE_LOCATION}</p>
+            <p style="font-size: 11px; color: #666; margin: 2px 0 0 0;">WA Official: ${OFFICIAL_STORE_WA} • Email: ${OFFICIAL_STORE_EMAIL}</p>
           </div>
 
           <!-- Order Summary Card -->

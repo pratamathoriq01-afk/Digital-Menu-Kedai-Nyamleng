@@ -2,21 +2,18 @@ import { OAuth2Client, Credentials } from 'google-auth-library';
 import { google } from 'googleapis';
 import crypto from 'crypto';
 
-const FALLBACK_CLIENT_ID = '899274496131-nvvt5soqunfe5v1a08t5p9r3fha4g1qq.apps.googleusercontent.com';
-const FALLBACK_CLIENT_SECRET = ['GOCSPX', 'wLQN_JZOEgCYN_zKgVlxZOX1c9Ej'].join('-');
-
-const rawClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || FALLBACK_CLIENT_ID;
-const rawClientSecret = process.env.GOOGLE_CLIENT_SECRET || FALLBACK_CLIENT_SECRET;
+const rawClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+const rawClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
 
 const GOOGLE_CLIENT_ID = rawClientId.replace(/^["']|["']$/g, '').trim();
 const GOOGLE_CLIENT_SECRET = rawClientSecret.replace(/^["']|["']$/g, '').trim();
 
 /**
  * Mendapatkan instance OAuth2Client secara dinamis berdasarkan domain asal (origin)
- * @param origin - Contoh: 'http://localhost:3000' atau 'https://digital-menu-kedai-nyamleng.vercel.app'
+ * @param origin - Contoh: 'http://localhost:3000' atau domain Vercel terdaftar
  */
 export const getGoogleOAuthClient = (origin?: string): OAuth2Client => {
-  const defaultOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://digital-menu-kedai-nyamleng.vercel.app';
+  const defaultOrigin = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
   const targetOrigin = origin || defaultOrigin;
   
   // Bersihkan trailing slash jika ada agar formatnya konsisten
@@ -282,7 +279,7 @@ export const parseGoogleOAuthError = (errorCode: string): GoogleOAuthErrorDiagno
         code: 'redirect_uri_mismatch',
         title: 'Redirect URI Tidak Cocok (mismatch)',
         description: 'URL Callback redirect_uri yang dikirim dalam request otorisasi tidak terdaftar di Authorized Redirect URIs Google Cloud Console.',
-        resolution: 'Buka Google Cloud Console > Credentials > Edit Client ID, lalu tambahkan "http://localhost:3000/api/auth/google/callback" dan "https://digital-menu-kedai-nyamleng.vercel.app/api/auth/google/callback" ke Authorized redirect URIs.'
+        resolution: 'Buka Google Cloud Console > Credentials > Edit Client ID, lalu tambahkan domain callback aktif Anda (termasuk /api/auth/google/callback) ke Authorized redirect URIs.'
       };
     case 'disallowed_useragent':
       return {

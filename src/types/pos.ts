@@ -13,9 +13,9 @@ export type OrderStatus =
 
 export type POSSyncStatus = 'SYNCED' | 'PENDING_SYNC' | 'FAILED';
 
-export const OFFICIAL_STORE_WA = '085113661387';
-export const OFFICIAL_STORE_EMAIL = 'kedainyamleng03@gmail.com';
-export const STORE_LOCATION = 'Kota Malang, Jawa Timur';
+export const OFFICIAL_STORE_WA = process.env.NEXT_PUBLIC_STORE_WA || '';
+export const OFFICIAL_STORE_EMAIL = process.env.NEXT_PUBLIC_STORE_EMAIL || '';
+export const STORE_LOCATION = process.env.NEXT_PUBLIC_STORE_LOCATION || '';
 
 export interface Voucher {
   code: string;

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShoppingBag, Bike, Clock, MapPin, Sparkles, Star, ShieldCheck, Menu, User, LogOut, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
-import { OrderType, STORE_LOCATION } from '@/types/pos';
+import { OrderType, STORE_LOCATION, OFFICIAL_STORE_WA } from '@/types/pos';
 import { Logo } from './Logo';
 import { CustomerUser, handleSupabaseLogout } from '@/services/authService';
 
@@ -229,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <h3 className="font-black text-base text-white">{currentUser.name}</h3>
                 <p className="text-xs font-semibold text-amber-400">{currentUser.email}</p>
                 <p className="text-[11px] text-emerald-400 font-semibold mt-0.5">
-                  WA: {currentUser.phone || '085113661387'}
+                  WA: {currentUser.phone || OFFICIAL_STORE_WA}
                 </p>
               </div>
             </div>
