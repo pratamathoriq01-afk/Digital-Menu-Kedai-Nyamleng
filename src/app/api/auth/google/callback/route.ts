@@ -126,15 +126,28 @@ export async function GET(request: NextRequest) {
           customer.avatarUrl = googleUser.picture;
         }
 
-        await syncCustomerToSupabase(customer);
+        const syncedCustomer = await syncCustomerToSupabase(customer);
 
-        const response = NextResponse.redirect(new URL('/?login_success=true', origin));
-        response.cookies.set('kedai_nyamleng_user', encodeURIComponent(JSON.stringify(customer)), {
-          path: '/',
-          maxAge: 60 * 60 * 24 * 30, // 30 days
+        const customerPayload = {
+          id: syncedCustomer.id || customer.id,
+          name: syncedCustomer.name || customer.name,
+          email: syncedCustomer.email || customer.email,
+          phone: syncedCustomer.phone || customer.phone,
+          avatarUrl: syncedCustomer.avatarUrl || customer.avatarUrl,
+          googleId: syncedCustomer.googleId || customer.googleId,
+          provider: 'GOOGLE',
+        };
+
+        const encodedUser = Buffer.from(JSON.stringify(customerPayload)).toString('base64url');
+        const redirectUrl = new URL(`/?login_success=true&user=${encodedUser}`, origin);
+
+        const response = NextResponse.redirect(redirectUrl);
+        response.cookies.set('kedai_nyamleng_user', JSON.stringify(customerPayload), {
           httpOnly: false,
-          sameSite: 'lax',
           secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 60 * 60 * 24 * 30, // 30 days
+          path: '/',
         });
 
         return response;

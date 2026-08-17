@@ -54,39 +54,56 @@ export default function Home() {
   useEffect(() => {
     fetchMenuItems();
 
-    // 1. Periksa cookie autentikasi dari server OAuth Callback
-    let activeUser = getStoredCustomerUser();
-    
-    if (typeof document !== 'undefined') {
-      const matchCookie = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('kedai_nyamleng_user='));
-        
-      if (matchCookie) {
+    // 1. Periksa apakah ada payload user dari Google OAuth Redirect URL (?login_success=true&user=...)
+    let activeUser: CustomerUser | null = null;
+
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const loginSuccess = searchParams.get('login_success');
+      const userParam = searchParams.get('user');
+
+      if (loginSuccess === 'true' && userParam) {
         try {
-          const cookieVal = decodeURIComponent(matchCookie.split('=')[1]);
-          const parsedFromCookie: CustomerUser = JSON.parse(cookieVal);
-          if (parsedFromCookie && parsedFromCookie.email) {
-            setStoredCustomerUser(parsedFromCookie);
-            activeUser = parsedFromCookie;
+          const jsonStr = Buffer.from(userParam, 'base64url').toString('utf8');
+          const userObj = JSON.parse(jsonStr);
+          if (userObj && userObj.email) {
+            setStoredCustomerUser(userObj);
+            activeUser = userObj;
+            window.history.replaceState({}, '', window.location.pathname);
           }
-        } catch (e) {
-          console.warn('[Cookie Customer Parse Notice]:', e);
+        } catch (err) {
+          console.error('[Hydrate User Param Error]:', err);
         }
       }
     }
 
+    // 2. Jika tidak ada di URL, periksa localStorage
+    if (!activeUser) {
+      activeUser = getStoredCustomerUser();
+    }
+
+    // 3. Jika belum ada di localStorage, periksa Cookie browser kedai_nyamleng_user
+    if (!activeUser && typeof document !== 'undefined') {
+      const match = document.cookie.match(/kedai_nyamleng_user=([^;]+)/);
+      if (match) {
+        try {
+          const parsedCookie = JSON.parse(decodeURIComponent(match[1]));
+          if (parsedCookie && parsedCookie.email) {
+            activeUser = parsedCookie;
+            setStoredCustomerUser(parsedCookie);
+          }
+        } catch (cookieErr) {
+          console.warn('[Cookie User Parse Error]:', cookieErr);
+        }
+      }
+    }
+
+    // 4. Update State UI berdasarkan ketersediaan user
     if (activeUser) {
       setCurrentUser(activeUser);
       setIsGoogleLoginOpen(false);
     } else {
       setIsGoogleLoginOpen(true);
-    }
-
-    // Clean up login_success query parameter from address bar
-    if (typeof window !== 'undefined' && window.location.search.includes('login_success=true')) {
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState({}, '', cleanUrl);
     }
 
     // Realtime Supabase Auth SSO State Listener
