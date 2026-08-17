@@ -53,12 +53,40 @@ export default function Home() {
 
   useEffect(() => {
     fetchMenuItems();
-    const stored = getStoredCustomerUser();
-    if (stored) {
-      setCurrentUser(stored);
+
+    // 1. Periksa cookie autentikasi dari server OAuth Callback
+    let activeUser = getStoredCustomerUser();
+    
+    if (typeof document !== 'undefined') {
+      const matchCookie = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith('kedai_nyamleng_user='));
+        
+      if (matchCookie) {
+        try {
+          const cookieVal = decodeURIComponent(matchCookie.split('=')[1]);
+          const parsedFromCookie: CustomerUser = JSON.parse(cookieVal);
+          if (parsedFromCookie && parsedFromCookie.email) {
+            setStoredCustomerUser(parsedFromCookie);
+            activeUser = parsedFromCookie;
+          }
+        } catch (e) {
+          console.warn('[Cookie Customer Parse Notice]:', e);
+        }
+      }
+    }
+
+    if (activeUser) {
+      setCurrentUser(activeUser);
       setIsGoogleLoginOpen(false);
     } else {
       setIsGoogleLoginOpen(true);
+    }
+
+    // Clean up login_success query parameter from address bar
+    if (typeof window !== 'undefined' && window.location.search.includes('login_success=true')) {
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
     }
 
     // Realtime Supabase Auth SSO State Listener

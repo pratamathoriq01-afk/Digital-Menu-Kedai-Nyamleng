@@ -127,6 +127,17 @@ export async function GET(request: NextRequest) {
         }
 
         await syncCustomerToSupabase(customer);
+
+        const response = NextResponse.redirect(new URL('/?login_success=true', origin));
+        response.cookies.set('kedai_nyamleng_user', encodeURIComponent(JSON.stringify(customer)), {
+          path: '/',
+          maxAge: 60 * 60 * 24 * 30, // 30 days
+          httpOnly: false,
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+        });
+
+        return response;
       }
     } catch (profileErr) {
       console.warn('[Google UserInfo Fetch Notice]:', profileErr);
