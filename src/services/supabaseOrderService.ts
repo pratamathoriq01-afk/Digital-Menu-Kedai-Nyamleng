@@ -30,7 +30,7 @@ export const createSupabaseTransaction = async (order: OrderPayload) => {
         netProfit,
         cashReceived: order.totalAmount,
         change: 0,
-        orderStatus: 'PROCESSED',
+        orderStatus: order.orderStatus || 'PENDING',
         customerPhone: order.customerPhone,
         customerEmail: order.customerEmail,
         deliveryCourier: order.deliveryCourier || null,

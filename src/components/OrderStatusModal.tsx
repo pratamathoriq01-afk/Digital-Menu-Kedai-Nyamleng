@@ -31,10 +31,13 @@ export const OrderStatusModal: React.FC = () => {
   // Client-side Notification Deduplication Tracker
   const dispatchedStatusesRef = useRef<Set<string>>(new Set());
 
-  // Mounted Hydration Safety Guard
+  // Mounted Hydration Safety Guard & Active Order Sync
   useEffect(() => {
     setIsMounted(true);
-  }, []);
+    if (activeOrder) {
+      setCurrentStatus(activeOrder.orderStatus || 'PENDING');
+    }
+  }, [activeOrder]);
 
   // Realtime Timestamp Tracker (Seconds elapsed since order creation)
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
