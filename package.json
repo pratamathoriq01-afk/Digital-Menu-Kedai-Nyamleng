@@ -9,9 +9,11 @@
     "lint": "echo 'Linting passed'"
   },
   "dependencies": {
+    "@base-ui/react": "^1.7.0",
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.112.3",
     "@vercel/speed-insights": "^2.0.0",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
