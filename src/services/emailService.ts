@@ -254,60 +254,19 @@ export const sendOrderReceiptEmail = async (order: OrderPayload) => {
   const apiKey = getStoreResendKey().trim().replace(/^["']|["']$/g, '');
   const recipientEmail = (order.customerEmail || OFFICIAL_STORE_EMAIL).trim();
 
+  const gmailUser = (process.env.GMAIL_USER || OFFICIAL_STORE_EMAIL || 'kedainyamleng03@gmail.com').trim();
+  const gmailPass = (process.env.GMAIL_APP_PASSWORD || '').trim();
+
   const dispatchResults: any = {
     recipientEmail,
     resendStatus: null,
     nodemailerStatus: null,
   };
 
-  // 1. Resend API Dispatch
-  if (apiKey && apiKey.startsWith('re_')) {
-    const resend = new Resend(apiKey);
-    try {
-      console.log(`[EmailService] Dispatching Realtime E-Receipt via Resend to ${recipientEmail}...`);
-      const response = await resend.emails.send({
-        from: `Kedai Nyamleng <onboarding@resend.dev>`,
-        to: [recipientEmail],
-        subject,
-        html: htmlContent,
-      });
-
-      if (!response.error) {
-        console.log('[EmailService] Resend Direct Success to:', recipientEmail, response);
-        dispatchResults.resendStatus = { success: true, response };
-        return { success: true, provider: 'Resend', recipientEmail, details: dispatchResults };
-      }
-
-      console.warn('[EmailService] Resend Notice for external email:', response.error.message);
-      
-      // If Resend onboarding domain restricts external emails, send archive copy to store email
-      if (response.error.message.includes('only send to your own email address')) {
-        const storeArchiveRes = await resend.emails.send({
-          from: `Kedai Nyamleng <onboarding@resend.dev>`,
-          to: [OFFICIAL_STORE_EMAIL],
-          subject: `[Arsip Toko] ${subject} (Pemesan: ${order.customerName} - ${recipientEmail})`,
-          html: htmlContent,
-        });
-        console.log('[EmailService] Store Archive Resend Dispatch Success:', storeArchiveRes);
-        dispatchResults.resendStatus = { 
-          success: true, 
-          archiveDispatched: true, 
-          storeArchiveRes,
-          note: `E-Receipt archived to ${OFFICIAL_STORE_EMAIL} due to onboarding domain restriction.` 
-        };
-      }
-    } catch (err: any) {
-      console.warn('[EmailService] Resend Exception:', err?.message);
-    }
-  }
-
-  // 2. Hybrid Fallback: Nodemailer Gmail SMTP Dispatcher
-  const gmailUser = (process.env.GMAIL_USER || OFFICIAL_STORE_EMAIL).trim();
-  const gmailPass = (process.env.GMAIL_APP_PASSWORD || '').trim();
-
+  // 1. PRIMARY DISPATCHER: Nodemailer Gmail SMTP (kedainyamleng03@gmail.com)
   if (gmailUser && gmailPass && !gmailPass.includes('your16char')) {
     try {
-      console.log(`[EmailService] Attempting Nodemailer Gmail SMTP dispatch to ${recipientEmail}...`);
+      console.log(`[EmailService Primary] Dispatching E-Receipt via Gmail SMTP (${gmailUser}) to ${recipientEmail}...`);
       const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -323,18 +282,64 @@ export const sendOrderReceiptEmail = async (order: OrderPayload) => {
         html: htmlContent,
       });
 
-      console.log('[EmailService] Nodemailer Gmail Dispatch Success to:', recipientEmail, info);
+      console.log('[EmailService Primary] Nodemailer Gmail Dispatch Success to:', recipientEmail, info);
       dispatchResults.nodemailerStatus = { success: true, info };
-      return { success: true, provider: 'Nodemailer Gmail SMTP', recipientEmail, details: dispatchResults };
+      return { 
+        success: true, 
+        provider: `Nodemailer Gmail SMTP (${gmailUser})`, 
+        recipientEmail, 
+        details: dispatchResults 
+      };
     } catch (e: any) {
-      console.error('[EmailService] Nodemailer Exception:', e?.message || e);
+      console.error('[EmailService Primary] Nodemailer Exception:', e?.message || e);
       dispatchResults.nodemailerStatus = { success: false, error: e?.message };
+    }
+  }
+
+  // 2. SECONDARY DISPATCHER: Resend API
+  if (apiKey && apiKey.startsWith('re_')) {
+    const resend = new Resend(apiKey);
+    try {
+      console.log(`[EmailService Secondary] Dispatching Realtime E-Receipt via Resend to ${recipientEmail}...`);
+      const response = await resend.emails.send({
+        from: `Kedai Nyamleng <onboarding@resend.dev>`,
+        to: [recipientEmail],
+        subject,
+        html: htmlContent,
+      });
+
+      if (!response.error) {
+        console.log('[EmailService Secondary] Resend Direct Success to:', recipientEmail, response);
+        dispatchResults.resendStatus = { success: true, response };
+        return { success: true, provider: 'Resend', recipientEmail, details: dispatchResults };
+      }
+
+      console.warn('[EmailService Secondary] Resend Notice for external email:', response.error.message);
+      
+      // If Resend onboarding domain restricts external emails, send archive copy to store email
+      if (response.error.message.includes('only send to your own email address')) {
+        const storeArchiveRes = await resend.emails.send({
+          from: `Kedai Nyamleng <onboarding@resend.dev>`,
+          to: [OFFICIAL_STORE_EMAIL],
+          subject: `[Arsip Toko] ${subject} (Pemesan: ${order.customerName} - ${recipientEmail})`,
+          html: htmlContent,
+        });
+        console.log('[EmailService Secondary] Store Archive Resend Dispatch Success:', storeArchiveRes);
+        dispatchResults.resendStatus = { 
+          success: true, 
+          archiveDispatched: true, 
+          storeArchiveRes,
+          note: `E-Receipt archived to ${OFFICIAL_STORE_EMAIL} due to onboarding domain restriction.` 
+        };
+      }
+    } catch (err: any) {
+      console.warn('[EmailService Secondary] Resend Exception:', err?.message);
     }
   }
 
   return { 
     success: true, 
-    provider: dispatchResults.resendStatus?.success ? 'Resend Store Archive' : 'Realtime Dispatch Complete', 
+    provider: dispatchResults.nodemailerStatus?.success ? 'Nodemailer Gmail SMTP' : 'Realtime Dispatch Complete', 
     recipientEmail, 
     details: dispatchResults 
   };
