@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 const getStoreMetaToken = (): string => {
   const envVal = (process.env.WA_ACCESS_TOKEN || '').trim().replace(/^["']|["']$/g, '');
   if (envVal && envVal.length > 10) return envVal;
-  return 'EAIVg03W6mvsBSAAkJznZAZBSkvU1ZCwnHfZBm0p6ZBFiXL5fFr47E3ZBqF7RbEs60Hy3X30ZBy4q304QcT6MZAbZC0v46pKtMaNo8p48h19ZAU6SZBRKok3n1yj0fxtOpSDomQSYISDxz7bzzv0wkiIsvXMbM00E3y5dZAXdNVMQsKC29ZCPigGoD219albKSK6tyjGJ4eAZDZD';
+  return 'EAAPElVrR6k8BSBJL4qp3hmABy9rkSvxBhmZBesMCXM1QP96dMzSLlT7sWcuNYxQS1C0fQwLQ1yAfut1B77tLyDZCkTIZBbKspR1kZAmEI9N8Xjn9n6pSZCzANzpdwq5FzvyeX6MZACbYNM7h5y2V8nhZC1z8eeZAw4Iw9PAAKhYInMPBMzHq8vqUlz8V6asl7vHC7JCuuK60RN5REb7ARLV6te9gsMcpEEvJKeXZAzZBiAYmDvSoZC0MyNGZAqVFI7wmg8ZCU8k2n8iIWE2YGRrOgg3ofR1jKxZCCrGpPjUYktMQZDZD';
 };
 
 const getStorePhoneId = (): string => {
