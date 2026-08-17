@@ -6,6 +6,7 @@ import { useCartStore } from '@/store/useCartStore';
 import { OrderType, STORE_LOCATION, OFFICIAL_STORE_WA } from '@/types/pos';
 import { Logo } from './Logo';
 import { CustomerUser, handleSupabaseLogout } from '@/services/authService';
+import { useBodyScrollLock } from '@/lib/scrollLock';
 
 interface HeaderProps {
   onOpenSidebarDrawer?: () => void;

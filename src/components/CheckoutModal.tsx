@@ -23,6 +23,7 @@ import { useCartStore } from '@/store/useCartStore';
 import { DeliveryCourier, OFFICIAL_STORE_WA } from '@/types/pos';
 import { PromoVoucherModal } from './PromoVoucherModal';
 import { getStoredCustomerUser } from '@/services/authService';
+import { useBodyScrollLock } from '@/lib/scrollLock';
 
 export const CheckoutModal: React.FC = () => {
   const {
@@ -45,6 +46,8 @@ export const CheckoutModal: React.FC = () => {
     toggleVoucherModal,
     submitOrder,
   } = useCartStore();
+
+  useBodyScrollLock(isCheckoutOpen);
 
   const [checkoutStep, setCheckoutStep] = useState<'FORM' | 'QRIS_PAYMENT'>('FORM');
   const [nameInput, setNameInput] = useState(customerName || '');

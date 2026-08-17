@@ -18,6 +18,7 @@ import {
 import { CustomerUser, setStoredCustomerUser } from '@/services/authService';
 import { supabase } from '@/lib/supabaseClient';
 import { useCartStore } from '@/store/useCartStore';
+import { useBodyScrollLock } from '@/lib/scrollLock';
 
 interface OrderHistoryDrawerProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
   currentUser,
   onLogout,
 }) => {
+  useBodyScrollLock(isOpen);
   const [historyOrders, setHistoryOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toggleOrderStatus } = useCartStore();

@@ -18,9 +18,11 @@ import {
 import { useCartStore } from '@/store/useCartStore';
 import { OFFICIAL_STORE_WA, OrderStatus, STORE_LOCATION } from '@/types/pos';
 import { supabase } from '@/lib/supabaseClient';
+import { useBodyScrollLock } from '@/lib/scrollLock';
 
 export const OrderStatusModal: React.FC = () => {
   const { isOrderStatusOpen, toggleOrderStatus, activeOrder } = useCartStore();
+  useBodyScrollLock(isOrderStatusOpen);
   const [currentStatus, setCurrentStatus] = useState<OrderStatus>('CONFIRMED');
   const [isCopied, setIsCopied] = useState(false);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);

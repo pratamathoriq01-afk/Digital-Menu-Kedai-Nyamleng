@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, Minus, Check, MessageSquare, Clock } from 'lucide-react';
 import { MenuItem, SelectedAddOn, SelectedVariant } from '@/types/pos';
 import { useCartStore } from '@/store/useCartStore';
+import { useBodyScrollLock } from '@/lib/scrollLock';
 
 interface ItemCustomizeModalProps {
   item: MenuItem | null;
@@ -16,6 +17,7 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  useBodyScrollLock(isOpen);
   const { addToCart } = useCartStore();
 
   const [selectedVariants, setSelectedVariants] = useState<SelectedVariant[]>([]);

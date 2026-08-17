@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, Utensils, Edit3, MessageSquareText } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
+import { useBodyScrollLock } from '@/lib/scrollLock';
 
 export const CartDrawer: React.FC = () => {
   const {
@@ -21,6 +22,8 @@ export const CartDrawer: React.FC = () => {
     getTotalAmount,
     toggleCheckout,
   } = useCartStore();
+
+  useBodyScrollLock(isCartOpen);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 

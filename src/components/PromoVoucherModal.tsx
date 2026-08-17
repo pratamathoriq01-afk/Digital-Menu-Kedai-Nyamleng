@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { X, ArrowLeft, Ticket, CheckCircle2, Clock, AlertCircle, Sparkles } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
 import { Voucher } from '@/types/pos';
+import { useBodyScrollLock } from '@/lib/scrollLock';
 
 export const PromoVoucherModal: React.FC = () => {
   const {
@@ -15,6 +16,8 @@ export const PromoVoucherModal: React.FC = () => {
     removeVoucher,
     getSubtotal,
   } = useCartStore();
+
+  useBodyScrollLock(isVoucherModalOpen);
 
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
 

@@ -20,6 +20,7 @@ import {
   getRecentCustomerAccounts
 } from '@/services/authService';
 import { supabase } from '@/lib/supabaseClient';
+import { useBodyScrollLock } from '@/lib/scrollLock';
 
 interface GoogleLoginModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   isOpen,
   onLoginSuccess,
 }) => {
+  useBodyScrollLock(isOpen);
   const [stepMode, setStepMode] = useState<StepMode>('FIGMA_MAIN');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
