@@ -2,8 +2,11 @@ import { OAuth2Client, Credentials } from 'google-auth-library';
 import { google } from 'googleapis';
 import crypto from 'crypto';
 
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '899274496131-nvvt5soqunfe5v1a08t5p9r3fha4g1qq.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const rawClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+const rawClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+
+const GOOGLE_CLIENT_ID = rawClientId ? rawClientId.replace(/^["']|["']$/g, '').trim() : '899274496131-nvvt5soqunfe5v1a08t5p9r3fha4g1qq.apps.googleusercontent.com';
+const GOOGLE_CLIENT_SECRET = rawClientSecret ? rawClientSecret.replace(/^["']|["']$/g, '').trim() : '';
 
 /**
  * Mendapatkan instance OAuth2Client secara dinamis berdasarkan domain asal (origin)
