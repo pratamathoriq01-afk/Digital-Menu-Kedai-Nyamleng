@@ -65,12 +65,56 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
     fetchCustomerHistory();
   }, [isOpen, currentUser]);
 
-  if (!isOpen) return null;
+  const handleOrderClick = (order: any) => {
+    const cartItems = (order.items || []).map((item: any) => ({
+      cartItemId: item.id || `item-${Math.random()}`,
+      menuItem: {
+        id: item.menuItemId || 'menu-item',
+        name: item.nameSnapshot || 'Menu Nyamleng',
+        description: '',
+        price: item.priceSnapshot || 0,
+        category: 'food',
+        imageUrl: '',
+        isAvailable: true
+      },
+      selectedVariants: item.variants || [],
+      selectedAddOns: item.addOns || [],
+      itemNotes: item.notes || '',
+      quantity: item.qty || item.quantity || 1,
+      unitPrice: item.priceSnapshot || 0,
+      itemSubtotal: (item.priceSnapshot || 0) * (item.qty || item.quantity || 1)
+    }));
+
+    const orderPayload: any = {
+      orderId: order.orderNumber || order.id,
+      customerName: order.customerName || currentUser?.name || 'Customer',
+      customerEmail: order.customerEmail || currentUser?.email || '',
+      customerPhone: order.customerPhone || currentUser?.phone || '',
+      orderType: order.orderType || 'TAKEAWAY',
+      deliveryCourier: order.deliveryCourier || 'GRAB_SEND',
+      orderNotes: order.orderNotes || '',
+      items: cartItems,
+      subtotal: order.subtotal || order.total || 0,
+      taxAmount: order.taxAmount || 0,
+      serviceFee: order.serviceFee || 0,
+      discountAmount: order.discountAmount || 0,
+      totalAmount: order.total || order.totalAmount || 0,
+      paymentMethod: order.paymentMethod || 'QRIS',
+      paymentStatus: order.paymentStatus || 'PAID',
+      orderStatus: order.orderStatus || 'PENDING',
+      createdAt: order.createdAt || new Date().toISOString(),
+      posSyncStatus: order.posSyncStatus || 'SYNCED'
+    };
+
+    onClose();
+    toggleOrderStatus(true, orderPayload);
+  };
 
   const formatRupiah = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
 
   const formatDate = (isoStr: string) => {
+    if (!isoStr) return '';
     try {
       const d = new Date(isoStr);
       return d.toLocaleDateString('id-ID', {
@@ -85,32 +129,27 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-start bg-black/60 backdrop-blur-xs animate-fade-in">
-      <div 
-        className="w-full max-w-sm bg-white h-full flex flex-col overflow-hidden shadow-2xl animate-slide-right"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Top Header Drawer */}
-        <div className="p-4 bg-charcoal text-white flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-nyamleng-600 rounded-xl text-white">
-              <History className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-extrabold text-sm">Riwayat Pesanan Saya</h2>
-              <p className="text-[10px] text-gray-300">Wadah Transaksi Akun Google</p>
-            </div>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-fade-in">
+      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-slide-left border-l border-parchment-border">
+        
+        {/* Header Drawer */}
+        <div className="p-4 bg-nyamleng-600 text-white flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-2 font-black text-sm">
+            <History className="w-5 h-5" />
+            <span>Riwayat Pembelian Customer</span>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+            className="p-1.5 hover:bg-nyamleng-700 rounded-full transition-all text-white/80 hover:text-white cursor-pointer"
           >
-            <X className="w-5 h-5 text-white" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Customer Account Info Banner */}
+        {/* Customer Profile Banner */}
         {currentUser ? (
           <div className="p-4 bg-gradient-to-r from-nyamleng-50 to-amber-50 border-b border-parchment-border flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
@@ -135,8 +174,8 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
               <p>Memuat Riwayat Transaksi Supabase...</p>
             </div>
           ) : historyOrders.length === 0 ? (
-            <div className="py-12 text-center text-xs text-gray-400 space-y-3 bg-white rounded-2xl p-6 border border-parchment-border">
-              <Receipt className="w-10 h-10 text-gray-300 mx-auto" />
+            <div className="py-16 text-center text-gray-400 space-y-3">
+              <Receipt className="w-12 h-12 text-gray-300 mx-auto stroke-[1.5]" />
               <h4 className="font-bold text-charcoal text-sm">Belum Ada Riwayat Pesanan</h4>
               <p className="text-[11px] text-gray-500">
                 Seluruh transaksi yang Anda pesan via akun Google ini akan tersimpan otomatis di sini.
@@ -149,12 +188,13 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
               return (
                 <div 
                   key={order.id} 
-                  className="bg-white rounded-2xl p-4 border border-parchment-border shadow-xs hover:border-nyamleng-300 transition-all space-y-3"
+                  onClick={() => handleOrderClick(order)}
+                  className="bg-white rounded-2xl p-4 border border-parchment-border shadow-xs hover:border-nyamleng-400 hover:shadow-md transition-all space-y-3 cursor-pointer active:scale-[0.99] group"
                 >
                   {/* Order ID & Date */}
                   <div className="flex items-center justify-between pb-2 border-b border-parchment-border text-xs">
                     <div>
-                      <span className="font-extrabold text-charcoal text-sm block">#{order.orderNumber || order.id}</span>
+                      <span className="font-extrabold text-charcoal text-sm block group-hover:text-nyamleng-600 transition-colors">#{order.orderNumber || order.id}</span>
                       <span className="text-[10px] text-gray-400 font-medium">{formatDate(order.createdAt)}</span>
                     </div>
 
@@ -186,8 +226,8 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
                       <div className="pt-1 text-[11px] text-gray-600 space-y-0.5 font-medium">
                         {order.items.slice(0, 2).map((item: any, idx: number) => (
                           <div key={idx} className="flex justify-between">
-                            <span>{item.qty}x {item.nameSnapshot}</span>
-                            <span className="font-mono text-[10px]">{formatRupiah(item.priceSnapshot * item.qty)}</span>
+                            <span>{item.qty || item.quantity}x {item.nameSnapshot}</span>
+                            <span className="font-mono text-[10px]">{formatRupiah((item.priceSnapshot || 0) * (item.qty || item.quantity || 1))}</span>
                           </div>
                         ))}
                         {order.items.length > 2 && (
@@ -197,6 +237,12 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
                         )}
                       </div>
                     )}
+                  </div>
+
+                  {/* Action Hint */}
+                  <div className="pt-2 border-t border-dashed border-gray-100 flex items-center justify-between text-[11px] text-nyamleng-600 font-bold group-hover:translate-x-0.5 transition-transform">
+                    <span>Lihat Rincian & Status Pesanan</span>
+                    <ChevronRight className="w-4 h-4" />
                   </div>
                 </div>
               );

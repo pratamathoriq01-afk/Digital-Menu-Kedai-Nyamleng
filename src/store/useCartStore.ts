@@ -88,7 +88,8 @@ interface CartState {
   setSelectedCategory: (catId: string) => void;
   toggleCart: (isOpen?: boolean) => void;
   toggleCheckout: (isOpen?: boolean) => void;
-  toggleOrderStatus: (isOpen?: boolean) => void;
+  toggleOrderStatus: (isOpen?: boolean, orderPayload?: OrderPayload | null) => void;
+  setActiveOrder: (orderPayload: OrderPayload | null) => void;
   toggleVoucherModal: (isOpen?: boolean) => void;
 
   // Cart Operations
@@ -163,7 +164,11 @@ export const useCartStore = create<CartState>()(
       setSelectedCategory: (catId) => set({ selectedCategory: catId }),
       toggleCart: (isOpen) => set((state) => ({ isCartOpen: isOpen ?? !state.isCartOpen })),
       toggleCheckout: (isOpen) => set((state) => ({ isCheckoutOpen: isOpen ?? !state.isCheckoutOpen })),
-      toggleOrderStatus: (isOpen) => set((state) => ({ isOrderStatusOpen: isOpen ?? !state.isOrderStatusOpen })),
+      toggleOrderStatus: (isOpen, orderPayload) => set((state) => ({ 
+        isOrderStatusOpen: isOpen ?? !state.isOrderStatusOpen,
+        ...(orderPayload !== undefined ? { activeOrder: orderPayload } : {})
+      })),
+      setActiveOrder: (orderPayload) => set({ activeOrder: orderPayload }),
       toggleVoucherModal: (isOpen) => set((state) => ({ isVoucherModalOpen: isOpen ?? !state.isVoucherModalOpen })),
 
       addToCart: (menuItem, selectedVariants = [], selectedAddOns = [], itemNotes = '', quantity = 1) => {

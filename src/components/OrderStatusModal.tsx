@@ -23,7 +23,7 @@ import { useBodyScrollLock } from '@/lib/scrollLock';
 export const OrderStatusModal: React.FC = () => {
   const { isOrderStatusOpen, toggleOrderStatus, activeOrder } = useCartStore();
   useBodyScrollLock(isOrderStatusOpen);
-  const [currentStatus, setCurrentStatus] = useState<OrderStatus>('CONFIRMED');
+  const [currentStatus, setCurrentStatus] = useState<OrderStatus>('PENDING');
   const [isCopied, setIsCopied] = useState(false);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -123,21 +123,21 @@ export const OrderStatusModal: React.FC = () => {
 
         if (data && data.orderStatus) {
           const raw = data.orderStatus.toUpperCase();
-          let mappedStatus: OrderStatus = 'CONFIRMED';
+          let mappedStatus: OrderStatus = 'PENDING';
           
           if (raw === 'NEW_ORDER' || raw === 'PENDING') {
-            mappedStatus = 'CONFIRMED'; // Stay at initial step 1 until Cashier accepts
-          } else if (raw === 'ORDER_ACCEPTED' || raw === 'CONFIRMED') {
+            mappedStatus = 'PENDING';
+          } else if (raw === 'ORDER_ACCEPTED' || raw === 'CONFIRMED' || raw === 'ACCEPTED') {
             mappedStatus = 'CONFIRMED';
-          } else if (raw === 'IN_PROCESSED' || raw === 'KITCHEN_PROCESSING' || raw === 'PROCESSED') {
+          } else if (raw === 'IN_PROCESSED' || raw === 'KITCHEN_PROCESSING' || raw === 'PROCESSED' || raw === 'PROCESSING') {
             mappedStatus = 'KITCHEN_PROCESSING';
-          } else if (raw === 'ORDER_FINISH' || raw === 'READY' || raw === 'COMPLETED') {
+          } else if (raw === 'ORDER_FINISH' || raw === 'READY' || raw === 'COMPLETED' || raw === 'FINISH') {
             mappedStatus = 'READY';
           }
 
           if (mappedStatus !== currentStatus) {
             setCurrentStatus(mappedStatus);
-            setNotificationToast(`[POS Update] Status pesanan #${activeOrder.orderId} diperbarui oleh Kasir App: ${mappedStatus}`);
+            setNotificationToast(`[POS Update] Status pesanan #${activeOrder.orderId} diperbarui: ${mappedStatus}`);
             sendWhatsAppProgressUpdate(mappedStatus);
           }
         }
@@ -187,9 +187,14 @@ export const OrderStatusModal: React.FC = () => {
 
   const steps = [
     {
+      id: 'PENDING',
+      label: 'Menunggu Konfirmasi Kasir',
+      desc: 'Pesanan terkirim, menunggu Kasir App menerima order',
+    },
+    {
       id: 'CONFIRMED',
       label: 'Diterima POS Kasir',
-      desc: 'Kasir mengonfirmasi pesanan baru',
+      desc: 'Kasir telah mengonfirmasi & meneruskan ke dapur',
     },
     {
       id: 'KITCHEN_PROCESSING',
@@ -348,9 +353,10 @@ export const OrderStatusModal: React.FC = () => {
             <div className="text-center pt-1 text-xs font-semibold text-white/90 relative z-10 flex items-center justify-center gap-1.5">
               <Flame className="w-4 h-4 text-amber-300 animate-bounce" />
               <span>
-                {currentStatus === 'CONFIRMED' && 'Pesanan baru terkirim ke POS. Menunggu Kasir menekan Terima...'}
-                {currentStatus === 'KITCHEN_PROCESSING' && 'Dapur sedang menggoreng & menyajikan pesanan...'}
-                {currentStatus === 'READY' && 'Pesanan selesai dimasak! Siap disajikan.'}
+                {currentStatus === 'PENDING' && '⏳ Pesanan terkirim. Menunggu Kasir menekan "Terima Order" di Kasir App...'}
+                {currentStatus === 'CONFIRMED' && '✅ Pesanan telah diterima Kasir! Diteruskan ke dapur...'}
+                {currentStatus === 'KITCHEN_PROCESSING' && '🍳 Dapur sedang menggoreng & menyajikan pesanan...'}
+                {currentStatus === 'READY' && '🎉 Pesanan selesai dimasak! Siap disajikan.'}
               </span>
             </div>
           </div>
@@ -364,6 +370,7 @@ export const OrderStatusModal: React.FC = () => {
             <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-parchment-border">
               {steps.map((step, idx) => {
                 const isDone = 
+                  (step.id === 'PENDING' && (currentStatus === 'PENDING' || currentStatus === 'CONFIRMED' || currentStatus === 'KITCHEN_PROCESSING' || currentStatus === 'READY')) ||
                   (step.id === 'CONFIRMED' && (currentStatus === 'CONFIRMED' || currentStatus === 'KITCHEN_PROCESSING' || currentStatus === 'READY')) ||
                   (step.id === 'KITCHEN_PROCESSING' && (currentStatus === 'KITCHEN_PROCESSING' || currentStatus === 'READY')) ||
                   (step.id === 'READY' && currentStatus === 'READY');
