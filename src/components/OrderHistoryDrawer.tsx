@@ -124,14 +124,6 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
                 <p className="text-[11px] text-gray-500 truncate">{currentUser.email}</p>
               </div>
             </div>
-
-            <button
-              onClick={onLogout}
-              className="p-2 hover:bg-red-50 text-red-600 hover:text-red-700 rounded-xl transition-all text-xs flex items-center gap-1 font-bold shrink-0 cursor-pointer"
-              title="Keluar / Logout Akun"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         ) : null}
 

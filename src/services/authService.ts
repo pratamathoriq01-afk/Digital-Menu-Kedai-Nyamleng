@@ -74,10 +74,25 @@ export const syncCustomerToSupabase = async (user: CustomerUser): Promise<Custom
       console.log('[Supabase Sync] Existing Customer Profile Found:', existing);
       const merged: CustomerUser = {
         ...existing,
+        name: user.name && user.name !== existing.name ? user.name : existing.name,
         phone: user.phone || existing.phone || defaultPhone,
         avatarUrl: user.avatarUrl || existing.avatarUrl,
-        provider: user.provider || 'GOOGLE',
+        provider: user.provider || existing.provider || 'GOOGLE',
       };
+
+      // Perform update to sync latest profile changes to Supabase PostgreSQL table
+      supabase
+        .from('Customer')
+        .update({
+          name: merged.name,
+          avatarUrl: merged.avatarUrl,
+          phone: merged.phone
+        })
+        .eq('email', cleanEmail)
+        .then(({ error }) => {
+          if (error) console.warn('[Supabase Profile Update Notice]:', error.message);
+        });
+
       setStoredCustomerUser(merged);
       return merged;
     }
@@ -207,6 +222,12 @@ export const handleSupabaseLogout = async (): Promise<void> => {
   } finally {
     // 2. Remove session & stored customer user from LocalStorage
     localStorage.removeItem(CUSTOMER_AUTH_KEY);
+
+    // 3. Hapus Cookie Sesi kedai_nyamleng_user
+    if (typeof document !== 'undefined') {
+      document.cookie = 'kedai_nyamleng_user=; Max-Age=0; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+    }
+
     console.log('[Supabase Logout] Session cleared successfully.');
   }
 };

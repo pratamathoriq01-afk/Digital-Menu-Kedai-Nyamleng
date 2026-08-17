@@ -61,7 +61,7 @@ export const generateDynamicAuthUrl = (origin?: string, state?: string, loginHin
 
   const options: any = {
     access_type: 'offline', // Meminta refresh token
-    prompt: 'select_account',
+    prompt: 'consent select_account',
     include_granted_scopes: true,
     state: oauthState,
     enable_granular_consent: true,
