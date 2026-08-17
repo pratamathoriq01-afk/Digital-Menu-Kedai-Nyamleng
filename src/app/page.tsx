@@ -1,3 +1,4 @@
+import { fetchSupabaseVouchers } from '@/services/supabaseMenuService';
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -53,6 +54,15 @@ export default function Home() {
 
   useEffect(() => {
     fetchMenuItems();
+
+    // Auto 3s realtime voucher sync poller
+    const voucherPoller = setInterval(() => {
+      fetchSupabaseVouchers().then((vouchers) => {
+        if (vouchers && Array.isArray(vouchers)) {
+          useCartStore.setState({ availableVouchers: vouchers });
+        }
+      }).catch(() => {});
+    }, 3000);
 
     // 1. Periksa apakah ada payload user dari Google OAuth Redirect URL (?login_success=true&user=...)
     let activeUser: CustomerUser | null = null;
