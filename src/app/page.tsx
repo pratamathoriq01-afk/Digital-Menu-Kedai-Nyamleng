@@ -1,7 +1,8 @@
-import { fetchSupabaseVouchers } from '@/services/supabaseMenuService';
 'use client';
 
+import { fetchSupabaseVouchers } from '@/services/supabaseMenuService';
 import React, { useState, useEffect } from 'react';
+
 import { 
   ShoppingBag, 
   ShoppingBasket, 
