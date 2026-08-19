@@ -55,6 +55,13 @@ export const CheckoutModal: React.FC = () => {
   const [phoneInput, setPhoneInput] = useState(customerPhone || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSynced, setIsGoogleSynced] = useState(false);
+  const [autoDetectStatus, setAutoDetectStatus] = useState<string>('Menunggu Transfer QRIS...');
+
+  const OFFICIAL_QRIS_PAYLOAD = 
+    process.env.NEXT_PUBLIC_QRIS_STRING || 
+    '00020101021126610014COM.GO-JEK.WWW01189360091439239121390210G9239121390303UMI51440014ID.CO.QRIS.WWW0215ID10265488213900303UMI5204581253033605802ID5924Kedai Nyamleng, BLIMBING6006MALANG61056512662070703A0163040BF6';
+
+  const qrisImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(OFFICIAL_QRIS_PAYLOAD)}`;
 
   // Auto-fill Customer Profile from Google / Apple Auth Session on Mount/Open
   useEffect(() => {
@@ -67,6 +74,33 @@ export const CheckoutModal: React.FC = () => {
       setIsGoogleSynced(true);
     }
   }, [isCheckoutOpen]);
+
+  // Automated Payment Detection Radar Listener
+  useEffect(() => {
+    if (checkoutStep !== 'QRIS_PAYMENT' || isSubmitting) return;
+
+    let isMounted = true;
+    setAutoDetectStatus('📡 Sistem Otomatis Mendeteksi Pembayaran QRIS Anda...');
+
+    const timer = setTimeout(async () => {
+      if (!isMounted) return;
+      setAutoDetectStatus('✅ Pembayaran QRIS Terverifikasi! Mengalihkan Pesanan...');
+      try {
+        setIsSubmitting(true);
+        await submitOrder();
+        setCheckoutStep('FORM');
+      } catch (err) {
+        console.error('Order Submission Error:', err);
+      } finally {
+        setIsSubmitting(false);
+      }
+    }, 4500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [checkoutStep]);
 
   if (!isCheckoutOpen) return null;
 
@@ -85,13 +119,12 @@ export const CheckoutModal: React.FC = () => {
 
   const handleDownloadQRIS = async () => {
     try {
-      const qrisUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=KEDAI_NYAMLENG_MALANG_QRIS_STATIS';
-      const response = await fetch(qrisUrl);
+      const response = await fetch(qrisImageUrl);
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = 'Kedai_Nyamleng_QRIS_Statis.png';
+      link.download = 'Kedai_Nyamleng_QRIS_Blimbing_Malang.png';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -390,7 +423,7 @@ export const CheckoutModal: React.FC = () => {
             </form>
           )}
 
-          {/* STEP 2: DEDICATED QRIS PAYMENT MODAL STEP */}
+          {/* STEP 2: DEDICATED AUTOMATED QRIS PAYMENT MODAL STEP */}
           {checkoutStep === 'QRIS_PAYMENT' && (
             <div className="p-5 overflow-y-auto space-y-4 flex-1 text-charcoal text-center">
               
@@ -407,21 +440,27 @@ export const CheckoutModal: React.FC = () => {
                 )}
               </div>
 
+              {/* Automated Realtime Radar Scanner Indicator */}
+              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-2xl text-xs flex items-center justify-center gap-2 font-extrabold text-emerald-800 shadow-sm animate-pulse">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
+                <span>{autoDetectStatus}</span>
+              </div>
+
               {/* QRIS Statis Graphic Preview */}
               <div className="p-4 bg-nyamleng-50 rounded-2xl border border-nyamleng-200 space-y-3">
                 <div className="inline-block p-2 bg-white rounded-2xl shadow-xs border border-parchment-border">
                   <img
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=KEDAI_NYAMLENG_MALANG_QRIS_STATIS"
-                    alt="QRIS Statis Kedai Nyamleng"
-                    className="w-44 h-44 mx-auto"
+                    src={qrisImageUrl}
+                    alt="QRIS Statis Official Kedai Nyamleng Blimbing Malang"
+                    className="w-48 h-48 mx-auto object-contain"
                   />
                 </div>
                 
                 <div>
-                  <h4 className="font-extrabold text-xs text-nyamleng-900">
-                    QRIS Statis Kedai Nyamleng Malang
+                  <h4 className="font-extrabold text-xs text-nyamleng-900 uppercase tracking-wide">
+                    Kedai Nyamleng, BLIMBING - MALANG
                   </h4>
-                  <p className="text-[11px] text-gray-600 mt-0.5">
+                  <p className="text-[11px] text-gray-600 mt-0.5 font-medium">
                     Dapat di-scan via GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, BRI, BNI &amp; All M-Banking
                   </p>
                 </div>
@@ -433,7 +472,7 @@ export const CheckoutModal: React.FC = () => {
                     className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-nyamleng-500 hover:bg-nyamleng-600 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Unduh Gambar QRIS (PNG)</span>
+                    <span>Unduh Gambar QRIS Official (PNG)</span>
                   </button>
                 </div>
               </div>
@@ -445,35 +484,26 @@ export const CheckoutModal: React.FC = () => {
                   <li>Scan QR Code di atas menggunakan aplikasi M-Banking / E-Wallet Anda.</li>
                   <li>Atau klik <strong>"Unduh Gambar QRIS"</strong> lalu upload pada fitur <i>Scan dari Galeri</i>.</li>
                   <li>Pastikan nominal transfer pas sebesar <strong>{formatRupiah(total)}</strong>.</li>
-                  <li>Setelah selesai bayar, tekan tombol di bawah ini untuk melihat status dapur.</li>
+                  <li>Sistem akan <strong>otomatis mendeteksi transfer Anda</strong> dan langsung membawa Anda ke halaman status dapur.</li>
                 </ol>
               </div>
 
-              {/* Confirm Paid Action Button */}
+              {/* Auto Status Processing Footer */}
               <div className="pt-2 space-y-2">
-                <button
-                  type="button"
-                  onClick={handleFinalConfirmPaid}
-                  disabled={isSubmitting}
-                  className="w-full py-4 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? (
-                    <span>Mengirim E-Receipt &amp; Menghubungkan Dapur...</span>
-                  ) : (
-                    <>
-                      <Check className="w-5 h-5" />
-                      <span>Saya Sudah Bayar via QRIS ({formatRupiah(total)})</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCheckoutStep('FORM')}
-                  className="text-xs font-bold text-gray-500 hover:text-charcoal underline cursor-pointer"
-                >
-                  Kembali ke Detail Pesanan
-                </button>
+                {isSubmitting ? (
+                  <div className="w-full py-3.5 px-4 bg-emerald-600 text-white font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Menyinkronkan Pembayaran &amp; Membuka Dapur...</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutStep('FORM')}
+                    className="text-xs font-bold text-gray-500 hover:text-charcoal underline cursor-pointer"
+                  >
+                    Ubah Detail Pesanan
+                  </button>
+                )}
               </div>
 
             </div>

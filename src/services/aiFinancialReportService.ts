@@ -84,7 +84,7 @@ export const generateAIFinancialReport = async (period: 'today' | 'week' | 'mont
     const openaiKey = (process.env.OPENAI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
     const geminiKey = (process.env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
 
-    const promptContext = 
+    const promptContext =
       `DOKUMEN LAPORAN KEUANGAN KEDAI NYAMLENG MALANG\n` +
       `Periode: ${period.toUpperCase()}\n` +
       `Total Omzet Kotor: Rp ${totalGrossRevenue.toLocaleString('id-ID')}\n` +
@@ -142,7 +142,7 @@ export const generateAIFinancialReport = async (period: 'today' | 'week' | 'mont
     }
 
     if (!aiExecutiveInsight) {
-      aiExecutiveInsight = 
+      aiExecutiveInsight =
         `Performa Penjualan Kedai Nyamleng pada periode ${period.toUpperCase()} tercatat sangat stabil dengan total omzet bersih mencapai Rp ${totalNetRevenue.toLocaleString('id-ID')} dari total ${txList.length} transaksi.\n` +
         `Menu terlaris utama didominasi oleh ${topSellingItems[0]?.name || 'Nasi Goreng Nyamleng'}. Rekomendasi: Pertahankan ketersediaan stok bahan utama untuk menjaga kontinuitas operasional kedai.`;
     }
