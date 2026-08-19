@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Temporary debug endpoint - check if critical env vars are present on Vercel
 export async function GET() {
   const gmailUserVal = process.env.GMAIL_USER || process.env.GMAIL_USER_KEDAI;
