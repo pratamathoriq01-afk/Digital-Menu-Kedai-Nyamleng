@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   QrCode, 
@@ -10,24 +10,26 @@ import {
   Phone, 
   Mail, 
   Bike, 
-  ChevronRight, 
   CheckCircle2, 
-  Tag,
-  Download,
-  ArrowLeft,
-  Check,
-  Edit3,
-  Lock,
-  Copy,
-  Clock,
-  Sparkles
+  Download, 
+  ArrowLeft, 
+  Edit3, 
+  Lock, 
+  Copy, 
+  Clock, 
+  Sparkles,
+  MapPin,
+  FileText,
+  AlertCircle
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
-import { DeliveryCourier, OFFICIAL_STORE_WA } from '@/types/pos';
+import { DeliveryCourier, OFFICIAL_STORE_WA, OrderPayload } from '@/types/pos';
 import { PromoVoucherModal } from './PromoVoucherModal';
 import { getStoredCustomerUser } from '@/services/authService';
 import { useBodyScrollLock } from '@/lib/scrollLock';
 import { generateDynamicQRIS } from '@/lib/qrisHelper';
+import { supabase } from '@/lib/supabaseClient';
+import { playSuccessChime, requestPushNotificationPermission } from '@/lib/notificationHelper';
 
 export const CheckoutModal: React.FC = () => {
   const {
@@ -36,7 +38,10 @@ export const CheckoutModal: React.FC = () => {
     customerName,
     customerEmail,
     customerPhone,
+    deliveryAddress,
+    addressNotes,
     setCustomerInfo,
+    setDeliveryAddress,
     orderType,
     deliveryCourier,
     setDeliveryCourier,
@@ -49,6 +54,9 @@ export const CheckoutModal: React.FC = () => {
     removeVoucher,
     toggleVoucherModal,
     submitOrder,
+    pendingPaymentOrder,
+    setPendingPaymentOrder,
+    clearPendingPayment,
   } = useCartStore();
 
   useBodyScrollLock(isCheckoutOpen);
@@ -57,17 +65,28 @@ export const CheckoutModal: React.FC = () => {
   const [nameInput, setNameInput] = useState(customerName || '');
   const [emailInput, setEmailInput] = useState(customerEmail || '');
   const [phoneInput, setPhoneInput] = useState(customerPhone || '');
+  const [addressInput, setAddressInput] = useState(deliveryAddress || '');
+  const [addressNotesInput, setAddressNotesInput] = useState(addressNotes || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSynced, setIsGoogleSynced] = useState(false);
   const [copiedNominal, setCopiedNominal] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(900); // 15 menit countdown
+  const [paymentSuccessCelebration, setPaymentSuccessCelebration] = useState(false);
+  const activePendingIdRef = useRef<string | null>(null);
 
   const OFFICIAL_QRIS_PAYLOAD = 
     process.env.NEXT_PUBLIC_QRIS_STRING || 
     process.env.NEXT_PUBLIC_QRIS_STRING_KEDAI ||
     '00020101021126610014COM.GO-JEK.WWW01189360091439239121390210G9239121390303UMI51440014ID.CO.QRIS.WWW0215ID10265488213900303UMI5204581253033605802ID5924Kedai Nyamleng, BLIMBING6006MALANG61056512662070703A0163040BF6';
 
-  // Auto-fill Customer Profile from Google / Apple Auth Session on Mount/Open
+  // Request browser push notification on checkout open
+  useEffect(() => {
+    if (isCheckoutOpen) {
+      requestPushNotificationPermission().catch(() => {});
+    }
+  }, [isCheckoutOpen]);
+
+  // Auto-fill Customer Profile from Google Auth Session on Mount/Open
   useEffect(() => {
     if (!isCheckoutOpen) return;
     const googleUser = getStoredCustomerUser();
@@ -79,7 +98,15 @@ export const CheckoutModal: React.FC = () => {
     }
   }, [isCheckoutOpen]);
 
-  // Payment Countdown Timer when in QRIS step
+  // Restore pending payment session if exists (Session Hold for M-Banking switch)
+  useEffect(() => {
+    if (isCheckoutOpen && pendingPaymentOrder) {
+      setCheckoutStep('QRIS_PAYMENT');
+      activePendingIdRef.current = pendingPaymentOrder.orderId;
+    }
+  }, [isCheckoutOpen, pendingPaymentOrder]);
+
+  // Payment Countdown Timer
   useEffect(() => {
     if (checkoutStep !== 'QRIS_PAYMENT') {
       setTimeLeft(900);
@@ -92,6 +119,81 @@ export const CheckoutModal: React.FC = () => {
 
     return () => clearInterval(timer);
   }, [checkoutStep]);
+
+  // Auto-Payment Realtime Detection & Background Tab Switch Listener
+  useEffect(() => {
+    if (checkoutStep !== 'QRIS_PAYMENT' || !activePendingIdRef.current) return;
+
+    const currentOrderId = activePendingIdRef.current;
+
+    const handlePaymentVerified = async () => {
+      setPaymentSuccessCelebration(true);
+      playSuccessChime();
+
+      // 2 seconds transition delay to celebrate and inform customer
+      setTimeout(async () => {
+        setPaymentSuccessCelebration(false);
+        setCheckoutStep('FORM');
+        clearPendingPayment();
+        await submitOrder('QRIS');
+      }, 2000);
+    };
+
+    // 1. Supabase Realtime WebSocket Channel Listener
+    const channel = supabase
+      .channel(`qris_payment_watch_${currentOrderId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'Transaction',
+          filter: `id=eq.${currentOrderId}`,
+        },
+        (payload: any) => {
+          const updated = payload.new;
+          if (updated && (updated.paymentStatus === 'PAID' || updated.orderStatus !== 'PENDING')) {
+            handlePaymentVerified();
+          }
+        }
+      )
+      .subscribe();
+
+    // 2. Instant Re-check on Window Focus / Visibility Change (when customer returns from m-banking)
+    const checkStatusDirectly = async () => {
+      try {
+        const { data } = await supabase
+          .from('Transaction')
+          .select('paymentStatus, orderStatus')
+          .eq('id', currentOrderId)
+          .single();
+
+        if (data && (data.paymentStatus === 'PAID' || data.orderStatus !== 'PENDING')) {
+          handlePaymentVerified();
+        }
+      } catch (e) {
+        console.warn('Direct payment status check error:', e);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkStatusDirectly();
+      }
+    };
+
+    window.addEventListener('focus', checkStatusDirectly);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Initial check
+    checkStatusDirectly();
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('focus', checkStatusDirectly);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [checkoutStep, submitOrder, clearPendingPayment]);
 
   if (!isCheckoutOpen) return null;
 
@@ -155,21 +257,68 @@ export const CheckoutModal: React.FC = () => {
       alert('Tolong masukkan nomor WhatsApp Anda terlebih dahulu');
       return;
     }
+    if (orderType === 'DELIVERY' && !addressInput.trim()) {
+      alert('Tolong masukkan alamat lengkap pengiriman untuk pesanan Delivery');
+      return;
+    }
 
     setCustomerInfo(nameInput, emailInput, phoneInput);
+    if (orderType === 'DELIVERY') {
+      setDeliveryAddress(addressInput, addressNotesInput);
+    }
+
+    // Initialize Pending Payment Session
+    const orderId = `KDN-${Date.now().toString().slice(-6)}`;
+    activePendingIdRef.current = orderId;
+
+    let fullNotes = '';
+    if (orderType === 'DELIVERY') {
+      fullNotes = `Alamat: ${addressInput}${addressNotesInput ? ` (Patokan: ${addressNotesInput})` : ''}`;
+    }
+
+    const pendingOrderPayload: OrderPayload = {
+      orderId,
+      customerName: nameInput,
+      customerEmail: emailInput,
+      customerPhone: phoneInput,
+      orderType,
+      deliveryCourier: orderType === 'DELIVERY' ? deliveryCourier : undefined,
+      orderNotes: fullNotes,
+      items: cartItems,
+      subtotal,
+      taxAmount: tax,
+      serviceFee: 0,
+      discountAmount: discount,
+      appliedVoucherCode: appliedVoucher?.code,
+      totalAmount: total,
+      paymentMethod: 'QRIS',
+      paymentStatus: 'PAID',
+      orderStatus: 'PENDING',
+      createdAt: new Date().toISOString(),
+      posSyncStatus: 'SYNCED',
+    };
+
+    setPendingPaymentOrder(pendingOrderPayload);
     setCheckoutStep('QRIS_PAYMENT');
   };
 
-  const handleFinalConfirmPaid = async () => {
+  const handleManualConfirmPaid = async () => {
     setIsSubmitting(true);
-    try {
-      await submitOrder();
-      setCheckoutStep('FORM');
-    } catch (err) {
-      console.error('Order Submission Error:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
+    setPaymentSuccessCelebration(true);
+    playSuccessChime();
+
+    setTimeout(async () => {
+      try {
+        await submitOrder('QRIS');
+        setCheckoutStep('FORM');
+        clearPendingPayment();
+      } catch (err) {
+        console.error('Order Submission Error:', err);
+      } finally {
+        setIsSubmitting(false);
+        setPaymentSuccessCelebration(false);
+      }
+    }, 1500);
   };
 
   const couriers: { id: DeliveryCourier; name: string; desc: string; badge: string }[] = [
@@ -183,7 +332,7 @@ export const CheckoutModal: React.FC = () => {
     <>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in pb-[env(safe-area-inset-bottom)]">
         <div 
-          className="w-full sm:max-w-xl bg-white rounded-t-3xl sm:rounded-3xl max-h-[88dvh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
+          className="w-full sm:max-w-xl bg-white rounded-t-3xl sm:rounded-3xl max-h-[90dvh] sm:max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -213,7 +362,9 @@ export const CheckoutModal: React.FC = () => {
             <button
               onClick={() => {
                 toggleCheckout(false);
-                setCheckoutStep('FORM');
+                if (!pendingPaymentOrder) {
+                  setCheckoutStep('FORM');
+                }
               }}
               className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
               aria-label="Tutup Modal"
@@ -224,18 +375,18 @@ export const CheckoutModal: React.FC = () => {
 
           {/* STEP 1: FORM & VOUCHER PROMO */}
           {checkoutStep === 'FORM' && (
-            <form onSubmit={handleProceedToQRISStep} className="p-5 overflow-y-auto space-y-5 flex-1 text-charcoal">
+            <form onSubmit={handleProceedToQRISStep} className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 text-charcoal">
               
-              {/* Customer Personal Details (Google Auto-Fill & Editable Correction) */}
-              <div className="space-y-3 bg-parchment-soft p-4 rounded-2xl border border-parchment-border">
+              {/* Customer Personal Details */}
+              <div className="space-y-3 bg-parchment-soft p-3.5 sm:p-4 rounded-2xl border border-parchment-border">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-xs uppercase tracking-wider text-gray-500">
-                    Data Pribadi Pemesan
+                    Data Pemesan & Kontak
                   </h3>
                   {isGoogleSynced && (
                     <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200">
                       <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      <span>Auto-Fill Google (Dapat Dikoreksi)</span>
+                      <span>Google Auto-Fill</span>
                     </span>
                   )}
                 </div>
@@ -243,7 +394,7 @@ export const CheckoutModal: React.FC = () => {
                 {/* Nama Lengkap */}
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-charcoal">
-                    Nama Lengkap / Panggilan <span className="text-red-500">*</span>
+                    Nama Lengkap <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -253,37 +404,33 @@ export const CheckoutModal: React.FC = () => {
                       placeholder="Contoh: Budi Santoso"
                       value={nameInput}
                       onChange={(e) => setNameInput(e.target.value)}
-                      className="w-full pl-9 pr-8 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"
+                      className="w-full pl-9 pr-4 py-2 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"
                     />
-                    <Edit3 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
 
                 {/* No WhatsApp */}
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-charcoal">
-                    Nomor WhatsApp <span className="text-red-500">*</span>
-                    <span className="text-[10px] text-gray-500 font-normal ml-1">(Notifikasi Toko: {OFFICIAL_STORE_WA})</span>
+                    Nomor WhatsApp Aktif <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="tel"
                       required
-                      placeholder={`Contoh: ${OFFICIAL_STORE_WA}`}
+                      placeholder="Contoh: 081234567890"
                       value={phoneInput}
                       onChange={(e) => setPhoneInput(e.target.value)}
-                      className="w-full pl-9 pr-8 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"
+                      className="w-full pl-9 pr-4 py-2 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"
                     />
-                    <Edit3 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
 
                 {/* Email Pembeli */}
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-charcoal">
-                    Email Pembeli <span className="text-red-500">*</span>
-                    <span className="text-[10px] text-gray-500 font-normal ml-1">(E-Receipt dikirim dari kedainyamleng03@gmail.com)</span>
+                    Email (Untuk E-Receipt) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -293,270 +440,248 @@ export const CheckoutModal: React.FC = () => {
                       placeholder="Contoh: budi@gmail.com"
                       value={emailInput}
                       onChange={(e) => setEmailInput(e.target.value)}
-                      className="w-full pl-9 pr-8 py-2.5 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"
+                      className="w-full pl-9 pr-4 py-2 text-xs bg-white rounded-xl border border-parchment-border focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-semibold"
                     />
-                    <Edit3 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                   </div>
-                </div>
-
-                <div className="pt-1 flex items-center justify-between text-[10px] text-gray-400">
-                  <span className="flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-emerald-500" />
-                    <span>Terlindungi Enkripsi Enterprise Supabase RLS</span>
-                  </span>
                 </div>
               </div>
 
-              {/* Delivery Courier Selector (Only if OrderType === 'DELIVERY') */}
+              {/* Delivery Address Section (Only if OrderType === 'DELIVERY') */}
               {orderType === 'DELIVERY' && (
-                <div className="space-y-3 bg-nyamleng-50/70 p-4 rounded-2xl border border-nyamleng-200">
+                <div className="space-y-3 bg-amber-50/60 p-3.5 sm:p-4 rounded-2xl border border-amber-200">
                   <div className="flex items-center gap-2">
-                    <Bike className="w-4 h-4 text-nyamleng-600" />
+                    <MapPin className="w-4 h-4 text-nyamleng-600" />
                     <h3 className="font-bold text-xs uppercase tracking-wider text-nyamleng-700">
-                      Pilih Layanan Kurir Delivery
+                      Alamat Lengkap Pengiriman Delivery
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {couriers.map((c) => {
-                      const isSelected = deliveryCourier === c.id;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setDeliveryCourier(c.id)}
-                          className={`flex items-start justify-between p-3 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-nyamleng-500 bg-white text-nyamleng-600 shadow-sm ring-2 ring-nyamleng-500'
-                              : 'border-parchment-border bg-white/80 hover:bg-white text-gray-700'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold">{c.name}</span>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-charcoal">
+                      Alamat Jalan, No. Rumah, RT/RW, Kelurahan <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      required
+                      rows={2}
+                      placeholder="Contoh: Jl. Laksda Adi Sucipto No. 45 RT 02/03, Kel. Blimbing, Malang"
+                      value={addressInput}
+                      onChange={(e) => setAddressInput(e.target.value)}
+                      className="w-full p-2.5 text-xs bg-white rounded-xl border border-amber-200 focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-medium leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-charcoal">
+                      Patokan Lokasi / Catatan Alamat (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Rumah pagar hitam samping Masjid / Titip di pos satpam"
+                      value={addressNotesInput}
+                      onChange={(e) => setAddressNotesInput(e.target.value)}
+                      className="w-full p-2 text-xs bg-white rounded-xl border border-amber-200 focus:outline-none focus:ring-2 focus:ring-nyamleng-500 font-medium"
+                    />
+                  </div>
+
+                  {/* Delivery Courier Selector */}
+                  <div className="pt-2">
+                    <label className="block text-xs font-bold text-charcoal mb-1.5">
+                      Pilihan Kurir Instant:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {couriers.map((c) => {
+                        const isSelected = deliveryCourier === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setDeliveryCourier(c.id)}
+                            className={`flex items-start justify-between p-2 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer ${
+                              isSelected
+                                ? 'border-nyamleng-500 bg-white text-nyamleng-600 shadow-xs ring-2 ring-nyamleng-500'
+                                : 'border-parchment-border bg-white/80 hover:bg-white text-gray-700'
+                            }`}
+                          >
+                            <div>
+                              <span className="font-bold text-[11px] block">{c.name}</span>
+                              <span className="text-[9px] text-gray-500">{c.desc}</span>
                             </div>
-                            <span className="text-[10px] text-gray-500 font-normal block mt-0.5">
-                              {c.desc}
-                            </span>
-                          </div>
-                          <span className="text-[9px] font-bold bg-nyamleng-100 text-nyamleng-700 px-1.5 py-0.5 rounded">
-                            {c.badge}
-                          </span>
-                        </button>
-                      );
-                    })}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Promos or Vouchers FIRST */}
-              <div className="space-y-2">
-                <h3 className="font-bold text-xs uppercase tracking-wider text-gray-500">
-                  Voucher Diskon Makanan &amp; Promo
-                </h3>
+              {/* Voucher Promo Section */}
+              <div className="bg-parchment-soft p-3.5 rounded-2xl border border-parchment-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-nyamleng-500" />
+                  <div>
+                    <span className="text-xs font-bold block">
+                      {appliedVoucher ? appliedVoucher.title : 'Punya Kode Promo / Voucher?'}
+                    </span>
+                    <span className="text-[10px] text-gray-500">
+                      {appliedVoucher ? `Hemat ${formatRupiah(discount)}` : 'Gunakan voucher diskon makanan'}
+                    </span>
+                  </div>
+                </div>
 
-                {!appliedVoucher ? (
+                {appliedVoucher ? (
+                  <button
+                    type="button"
+                    onClick={removeVoucher}
+                    className="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50"
+                  >
+                    Hapus
+                  </button>
+                ) : (
                   <button
                     type="button"
                     onClick={() => toggleVoucherModal(true)}
-                    className="w-full flex items-center justify-between p-3.5 bg-rose-50/80 hover:bg-rose-100/70 border border-rose-200 rounded-2xl text-xs transition-all shadow-xs group cursor-pointer"
+                    className="text-xs text-nyamleng-600 hover:text-nyamleng-700 font-bold px-3 py-1.5 rounded-xl bg-nyamleng-100 hover:bg-nyamleng-200"
                   >
-                    <div className="flex items-center gap-2.5 font-extrabold text-rose-600">
-                      <div className="p-1.5 bg-rose-500 text-white rounded-xl group-hover:scale-105 transition-transform">
-                        <Tag className="w-4 h-4" />
-                      </div>
-                      <span>% Klik Untuk Klaim / Pasang Voucher Promo</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-rose-400 group-hover:translate-x-0.5 transition-transform" />
+                    Pilih Promo
                   </button>
-                ) : (
-                  <div className="w-full flex items-center justify-between p-3.5 bg-emerald-50 border border-emerald-300 rounded-2xl text-xs shadow-xs">
-                    <div className="flex items-center gap-2.5">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                      <div>
-                        <span className="font-extrabold text-emerald-900 block">
-                          Voucher {appliedVoucher.code} Aktif
-                        </span>
-                        <span className="text-[11px] text-emerald-700 font-medium">
-                          {appliedVoucher.title} (-{formatRupiah(discount)})
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={removeVoucher}
-                      className="text-xs font-extrabold text-rose-600 hover:text-rose-700 underline px-2 py-1 cursor-pointer"
-                    >
-                      Hapus
-                    </button>
-                  </div>
                 )}
               </div>
 
-              {/* Order Invoice Breakdown */}
-              <div className="p-4 bg-parchment-soft rounded-2xl border border-parchment-border space-y-1.5 text-xs text-gray-600">
+              {/* Price Breakdown */}
+              <div className="bg-white p-3.5 rounded-2xl border border-parchment-border space-y-1.5 text-xs text-gray-600">
                 <div className="flex justify-between">
-                  <span>Subtotal ({cartItems.length} menu)</span>
-                  <span>{formatRupiah(subtotal)}</span>
+                  <span>Subtotal Pesanan</span>
+                  <span className="font-semibold text-charcoal">{formatRupiah(subtotal)}</span>
                 </div>
-
                 {discount > 0 && (
-                  <div className="flex justify-between text-emerald-600 font-bold">
-                    <span>Diskon Voucher ({appliedVoucher?.code})</span>
+                  <div className="flex justify-between text-emerald-600 font-semibold">
+                    <span>Diskon Voucher</span>
                     <span>-{formatRupiah(discount)}</span>
                   </div>
                 )}
-
                 <div className="flex justify-between">
                   <span>Pajak Resto (PB1 10%)</span>
-                  <span>{formatRupiah(tax)}</span>
+                  <span className="font-semibold text-charcoal">{formatRupiah(tax)}</span>
                 </div>
-
                 <div className="pt-2 border-t border-parchment-border flex justify-between items-center text-sm font-extrabold text-charcoal">
-                  <span>Total Tagihan Akhir</span>
+                  <span>Total Tagihan QRIS</span>
                   <span className="text-base text-nyamleng-600">{formatRupiah(total)}</span>
                 </div>
               </div>
 
-              {/* Action Button: Proceed to Dedicated QRIS Payment Step */}
+              {/* Submit Button to QRIS */}
               <button
                 type="submit"
-                className="w-full py-3.5 px-4 bg-nyamleng-500 hover:bg-nyamleng-600 active:scale-98 text-white font-extrabold text-sm rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                className="w-full py-3.5 bg-nyamleng-600 hover:bg-nyamleng-700 active:scale-98 text-white font-extrabold text-sm rounded-2xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
-                <span>Lanjut ke Pembayaran QRIS ({formatRupiah(total)})</span>
+                <span>Lanjut ke Scan QRIS Dinamis</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
           )}
 
-          {/* STEP 2: DEDICATED DYNAMIC QRIS PAYMENT GATEWAY STEP */}
+          {/* STEP 2: QRIS DYNAMIC PAYMENT STEP WITH SESSION HOLD & AUTO-DETECTION */}
           {checkoutStep === 'QRIS_PAYMENT' && (
-            <div className="p-5 overflow-y-auto space-y-4 flex-1 text-charcoal text-center">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-center text-charcoal">
               
-              {/* Total Final Payment Banner with Live Dynamic Indicator */}
-              <div className="p-4 bg-gradient-to-r from-nyamleng-500 to-nyamleng-600 text-white rounded-2xl shadow-md space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-amber-200 font-bold uppercase tracking-wider">
-                    Total Nominal Tagihan QRIS
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 backdrop-blur-xs px-2 py-0.5 rounded-full text-white">
-                    <Clock className="w-3 h-3 text-amber-300" />
-                    <span>Batas Waktu: {formatTimer(timeLeft)}</span>
-                  </span>
+              {/* Payment Success Celebration Overlay */}
+              {paymentSuccessCelebration ? (
+                <div className="p-8 bg-emerald-50 rounded-3xl border-2 border-emerald-500 space-y-4 animate-scale-up">
+                  <div className="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto shadow-lg animate-bounce">
+                    <CheckCircle2 className="w-10 h-10" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-emerald-800">Pembayaran Berhasil! 🎉</h3>
+                    <p className="text-xs text-emerald-600 mt-1">
+                      Sistem telah memverifikasi pembayaran Anda secara realtime. Mengalihkan ke live tracking pesanan...
+                    </p>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  {/* Session Hold Notice */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-2.5 text-[11px] text-amber-800 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-left font-semibold">
+                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Sesi QRIS terkunci aman (Bebas buka M-Banking / E-Wallet)</span>
+                    </div>
+                    <span className="font-mono font-bold text-amber-900 bg-amber-200/70 px-2 py-0.5 rounded-lg shrink-0">
+                      {formatTimer(timeLeft)}
+                    </span>
+                  </div>
 
-                <h3 className="text-3xl font-black tracking-tight">{formatRupiah(total)}</h3>
-                
-                <div className="pt-1 flex items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCopyNominal}
-                    className="inline-flex items-center gap-1 text-[11px] bg-white/15 hover:bg-white/25 active:scale-95 px-2.5 py-1 rounded-lg transition-all font-semibold cursor-pointer"
-                  >
-                    {copiedNominal ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-300" />
-                        <span className="text-emerald-200 font-bold">Nominal Tersalin!</span>
-                      </>
-                    ) : (
-                      <>
+                  {/* Nominal Card with Copy Feature */}
+                  <div className="bg-parchment-soft p-4 rounded-3xl border border-parchment-border space-y-1">
+                    <span className="text-[11px] uppercase font-bold text-gray-500 tracking-wider">
+                      Nominal QRIS Dinamis Otomatis
+                    </span>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-2xl sm:text-3xl font-black text-nyamleng-600 font-mono">
+                        {formatRupiah(total)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCopyNominal}
+                        className="p-1.5 hover:bg-parchment rounded-xl border border-parchment-border transition-colors text-gray-600 flex items-center gap-1 text-[10px] font-bold"
+                        title="Salin Nominal"
+                      >
                         <Copy className="w-3.5 h-3.5" />
-                        <span>Salin Nominal Pas</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+                        <span>{copiedNominal ? 'Tersalin!' : 'Salin'}</span>
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-gray-500 block">
+                      *Nominal langsung otomatis muncul saat QRIS discan di M-Banking / GoPay / OVO / Dana / BCA.
+                    </span>
+                  </div>
 
-              {/* Dynamic QRIS Notice Badge */}
-              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 flex items-center justify-center gap-1.5 font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-                <span>QRIS Dinamis Aktif: Nominal Rp {Math.round(total).toLocaleString('id-ID')} otomatis terisi saat di-scan!</span>
-              </div>
+                  {/* Dynamic QRIS Image Container */}
+                  <div className="bg-white p-4 rounded-3xl border-2 border-dashed border-nyamleng-300 max-w-[280px] sm:max-w-[320px] mx-auto shadow-md space-y-3">
+                    <div className="aspect-square bg-white rounded-2xl overflow-hidden flex items-center justify-center p-2">
+                      <img 
+                        src={qrisImageUrl} 
+                        alt="QRIS Dinamis Kedai Nyamleng" 
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <span className="text-[10px] font-extrabold text-charcoal bg-nyamleng-50 px-3 py-1 rounded-full inline-block border border-nyamleng-200">
+                      NMID: ID1026548821390 • Kedai Nyamleng
+                    </span>
+                  </div>
 
-              {/* QRIS Graphic Preview */}
-              <div className="p-4 bg-nyamleng-50 rounded-2xl border border-nyamleng-200 space-y-3">
-                <div className="inline-block p-2 bg-white rounded-2xl shadow-sm border border-parchment-border">
-                  <img
-                    src={qrisImageUrl}
-                    alt={`QRIS Dinamis Kedai Nyamleng Rp ${Math.round(total)}`}
-                    className="w-52 h-52 mx-auto object-contain"
-                  />
-                </div>
-                
-                <div>
-                  <h4 className="font-extrabold text-xs text-nyamleng-900 uppercase tracking-wide">
-                    Kedai Nyamleng, BLIMBING - MALANG
-                  </h4>
-                  <p className="text-[11px] text-gray-600 mt-0.5 font-medium">
-                    Support All E-Wallet &amp; M-Banking (GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, BRI, BNI)
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-2 gap-2.5 max-w-md mx-auto">
+                    <button
+                      type="button"
+                      onClick={handleDownloadQRIS}
+                      className="py-2.5 px-3 bg-white hover:bg-gray-50 border border-parchment-border text-charcoal font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                    >
+                      <Download className="w-4 h-4 text-gray-600" />
+                      <span>Unduh QRIS</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleManualConfirmPaid}
+                      className="py-2.5 px-3 bg-nyamleng-600 hover:bg-nyamleng-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{isSubmitting ? 'Memproses...' : 'Saya Sudah Bayar'}</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[10px] text-gray-400 max-w-sm mx-auto">
+                    💡 Sistem otomatis mendeteksi pembayaran realtime ketika kasir menerima dana. Tidak perlu khawatir jika browser tertutup saat membuka mobile banking.
                   </p>
-                </div>
-
-                <div>
-                  <button
-                    type="button"
-                    onClick={handleDownloadQRIS}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-nyamleng-500 hover:bg-nyamleng-600 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Unduh Gambar QRIS (PNG)</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Instructions */}
-              <div className="p-3.5 bg-parchment-soft rounded-xl border border-parchment-border text-left text-[11px] text-gray-600 space-y-1.5">
-                <p className="font-bold text-charcoal">Panduan Pembayaran QRIS:</p>
-                <ol className="list-decimal list-inside space-y-0.5">
-                  <li>Buka aplikasi M-Banking atau E-Wallet pilihan Anda.</li>
-                  <li>Scan QR Code di atas (atau pilih gambar dari galeri HP).</li>
-                  <li>Nominal <strong>{formatRupiah(total)}</strong> akan otomatis terisi di aplikasi Anda.</li>
-                  <li>Selesaikan transfer, lalu tekan tombol <strong>"Saya Sudah Bayar via QRIS"</strong> di bawah.</li>
-                </ol>
-              </div>
-
-              {/* Verified Payment Confirmation Button */}
-              <div className="pt-2 space-y-2">
-                <button
-                  type="button"
-                  onClick={handleFinalConfirmPaid}
-                  disabled={isSubmitting}
-                  className="w-full py-4 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Memverifikasi Pembayaran &amp; Mengirim E-Receipt...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-5 h-5" />
-                      <span>Saya Sudah Bayar via QRIS ({formatRupiah(total)})</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCheckoutStep('FORM')}
-                  disabled={isSubmitting}
-                  className="text-xs font-bold text-gray-500 hover:text-charcoal underline cursor-pointer"
-                >
-                  Kembali &amp; Ubah Pesanan
-                </button>
-              </div>
-
+                </>
+              )}
             </div>
           )}
-
         </div>
       </div>
 
-      {/* Promo & Voucher Selector Modal */}
+      {/* Promo Voucher Modal */}
       <PromoVoucherModal />
     </>
   );
 };
-

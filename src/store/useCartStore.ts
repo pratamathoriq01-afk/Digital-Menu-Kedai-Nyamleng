@@ -13,9 +13,10 @@ import {
   SelectedVariant,
   Voucher 
 } from '@/types/pos';
-import { MOCK_MENU_ITEMS } from '@/data/mockMenu';
+import { supabase } from '@/lib/supabaseClient';
 import { createSupabaseTransaction } from '@/services/supabaseOrderService';
 import { fetchSupabaseMenuItems, fetchSupabaseVouchers } from '@/services/supabaseMenuService';
+
 
 export const INITIAL_VOUCHERS: Voucher[] = [
   {
@@ -63,12 +64,16 @@ interface CartState {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  deliveryAddress: string;
+  addressNotes: string;
   orderNotes: string;
   isCartOpen: boolean;
   isCheckoutOpen: boolean;
   isOrderStatusOpen: boolean;
   isVoucherModalOpen: boolean;
   activeOrder: OrderPayload | null;
+  pendingPaymentOrder: OrderPayload | null;
+  customerOrderIds: string[];
   searchQuery: string;
   selectedCategory: string;
 
@@ -83,6 +88,7 @@ interface CartState {
   setOrderType: (type: OrderType) => void;
   setDeliveryCourier: (courier: DeliveryCourier) => void;
   setCustomerInfo: (name: string, email: string, phone?: string) => void;
+  setDeliveryAddress: (address: string, notes?: string) => void;
   setOrderNotes: (notes: string) => void;
   setSearchQuery: (query: string) => void;
   setSelectedCategory: (catId: string) => void;
@@ -90,7 +96,11 @@ interface CartState {
   toggleCheckout: (isOpen?: boolean) => void;
   toggleOrderStatus: (isOpen?: boolean, orderPayload?: OrderPayload | null) => void;
   setActiveOrder: (orderPayload: OrderPayload | null) => void;
+  setPendingPaymentOrder: (orderPayload: OrderPayload | null) => void;
+  clearPendingPayment: () => void;
+  saveCustomerOrderId: (orderId: string) => void;
   toggleVoucherModal: (isOpen?: boolean) => void;
+  syncActiveOrderFromSupabase: (orderId: string) => Promise<OrderPayload | null>;
 
   // Cart Operations
   addToCart: (
@@ -118,7 +128,7 @@ interface CartState {
   getItemCount: () => number;
 
   // Order Submission & Auto-Email Dispatch
-  submitOrder: (paymentMethod?: PaymentMethod) => Promise<OrderPayload>;
+  submitOrder: (paymentMethod?: PaymentMethod, explicitOrder?: OrderPayload) => Promise<OrderPayload>;
 }
 
 export const useCartStore = create<CartState>()(
@@ -132,12 +142,17 @@ export const useCartStore = create<CartState>()(
       customerName: '',
       customerEmail: '',
       customerPhone: '',
+      deliveryAddress: '',
+      addressNotes: '',
       orderNotes: '',
       isCartOpen: false,
       isCheckoutOpen: false,
       isOrderStatusOpen: false,
       isVoucherModalOpen: false,
       activeOrder: null,
+      pendingPaymentOrder: null,
+      customerOrderIds: [],
+
       searchQuery: '',
       selectedCategory: 'all',
 
@@ -166,6 +181,8 @@ export const useCartStore = create<CartState>()(
       setDeliveryCourier: (courier) => set({ deliveryCourier: courier }),
       setCustomerInfo: (name, email, phone = '') => 
         set({ customerName: name, customerEmail: email, customerPhone: phone }),
+      setDeliveryAddress: (address, notes = '') =>
+        set({ deliveryAddress: address, addressNotes: notes }),
       setOrderNotes: (notes) => set({ orderNotes: notes }),
       setSearchQuery: (query) => set({ searchQuery: query }),
       setSelectedCategory: (catId) => set({ selectedCategory: catId }),
@@ -176,6 +193,68 @@ export const useCartStore = create<CartState>()(
         ...(orderPayload !== undefined ? { activeOrder: orderPayload } : {})
       })),
       setActiveOrder: (orderPayload) => set({ activeOrder: orderPayload }),
+      setPendingPaymentOrder: (orderPayload) => set({ pendingPaymentOrder: orderPayload }),
+      clearPendingPayment: () => set({ pendingPaymentOrder: null }),
+      saveCustomerOrderId: (orderId) => set((state) => ({
+        customerOrderIds: Array.from(new Set([...state.customerOrderIds, orderId]))
+      })),
+      syncActiveOrderFromSupabase: async (orderId: string) => {
+        try {
+          const { data, error } = await supabase
+            .from('Transaction')
+            .select('*, items:TransactionItem(*)')
+            .eq('id', orderId)
+            .single();
+
+          if (error || !data) return null;
+
+          const syncedOrder: OrderPayload = {
+            orderId: data.id || data.orderNumber,
+            customerName: data.customerName,
+            customerEmail: data.customerEmail,
+            customerPhone: data.customerPhone,
+            orderType: data.orderType,
+            deliveryCourier: data.deliveryCourier,
+            orderNotes: data.orderNotes,
+            items: (data.items || []).map((item: any) => ({
+              cartItemId: item.id,
+              menuItem: {
+                id: item.menuItemId || 'menu-item',
+                posSku: item.id?.slice(-6).toUpperCase() || 'SKU-001',
+                name: item.nameSnapshot,
+                description: '',
+                price: Number(item.priceSnapshot),
+                categoryId: 'makanan',
+                image: '',
+                isAvailable: true,
+              },
+              selectedVariants: [],
+              selectedAddOns: [],
+              itemNotes: '',
+              quantity: item.qty || 1,
+              unitPrice: Number(item.priceSnapshot),
+              itemSubtotal: Number(item.priceSnapshot) * (item.qty || 1),
+            })),
+            subtotal: Number(data.subtotal || data.total),
+            taxAmount: Number(data.tax || 0),
+            serviceFee: 0,
+            discountAmount: Number(data.discountAmount || 0),
+            totalAmount: Number(data.total),
+            paymentMethod: 'QRIS',
+            paymentStatus: data.paymentStatus || 'PAID',
+            orderStatus: data.orderStatus || 'PENDING',
+            createdAt: data.createdAt,
+            posSyncStatus: 'SYNCED',
+          };
+
+          set({ activeOrder: syncedOrder });
+          return syncedOrder;
+        } catch (e) {
+          console.warn('[Sync Active Order Error]:', e);
+          return null;
+        }
+      },
+
       toggleVoucherModal: (isOpen) => {
         const nextState = isOpen ?? !get().isVoucherModalOpen;
         set({ isVoucherModalOpen: nextState });
@@ -271,15 +350,14 @@ export const useCartStore = create<CartState>()(
 
         const subtotal = state.getSubtotal();
         if (subtotal < voucher.minSubtotal) {
-          const formatRupiah = (val: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-          return { 
-            success: false, 
-            message: `Minimal belanja makanan untuk voucher ini adalah ${formatRupiah(voucher.minSubtotal)}. Tambahkan menu lagi!` 
+          return {
+            success: false,
+            message: `Minimal belanja untuk voucher ini adalah Rp ${voucher.minSubtotal.toLocaleString('id-ID')}`,
           };
         }
 
-        set({ appliedVoucher: voucher, isVoucherModalOpen: false });
-        return { success: true, message: `Voucher "${voucher.code}" berhasil dipasang!` };
+        set({ appliedVoucher: voucher });
+        return { success: true, message: `Voucher ${voucher.title} berhasil digunakan!` };
       },
 
       removeVoucher: () => set({ appliedVoucher: null }),
@@ -290,67 +368,87 @@ export const useCartStore = create<CartState>()(
 
       getTaxAmount: () => {
         const subtotal = get().getSubtotal();
-        return Math.round(subtotal * 0.1); // PB1 10%
+        const discount = get().getDiscountAmount();
+        const taxable = Math.max(subtotal - discount, 0);
+        return Math.round(taxable * 0.1);
       },
 
       getServiceFee: () => 0,
 
       getDiscountAmount: () => {
-        const state = get();
-        if (!state.appliedVoucher) return 0;
+        const { appliedVoucher } = get();
+        if (!appliedVoucher) return 0;
+        const subtotal = get().getSubtotal();
 
-        const subtotal = state.getSubtotal();
-        const v = state.appliedVoucher;
-
-        if (v.discountType === 'FIXED') {
-          return Math.min(v.discountValue, subtotal);
-        } else {
-          const calculated = Math.round((subtotal * v.discountValue) / 100);
-          return v.maxDiscount ? Math.min(calculated, v.maxDiscount) : calculated;
+        if (appliedVoucher.discountType === 'FIXED') {
+          return Math.min(appliedVoucher.discountValue, subtotal);
         }
+
+        if (appliedVoucher.discountType === 'PERCENTAGE') {
+          const discount = Math.round((subtotal * appliedVoucher.discountValue) / 100);
+          if (appliedVoucher.maxDiscount) {
+            return Math.min(discount, appliedVoucher.maxDiscount);
+          }
+          return discount;
+        }
+
+        return 0;
       },
 
       getTotalAmount: () => {
         const subtotal = get().getSubtotal();
-        const tax = get().getTaxAmount();
         const discount = get().getDiscountAmount();
-        return Math.max(subtotal + tax - discount, 0);
+        const tax = get().getTaxAmount();
+        const service = get().getServiceFee();
+        return Math.max(subtotal - discount + tax + service, 0);
       },
 
       getItemCount: () => {
         return get().cartItems.reduce((acc, item) => acc + item.quantity, 0);
       },
 
-      submitOrder: async () => {
+      submitOrder: async (paymentMethod = 'QRIS', explicitOrder?: OrderPayload) => {
         const state = get();
-        const orderId = `KDN-${Date.now().toString().slice(-6)}`;
-        const newOrder: OrderPayload = {
-          orderId,
-          customerName: state.customerName || 'Pelanggan Kedai',
-          customerEmail: state.customerEmail || OFFICIAL_STORE_EMAIL,
-          customerPhone: state.customerPhone || OFFICIAL_STORE_WA,
-          orderType: state.orderType,
-          deliveryCourier: state.orderType === 'DELIVERY' ? state.deliveryCourier : undefined,
-          items: state.cartItems,
-          subtotal: state.getSubtotal(),
-          taxAmount: state.getTaxAmount(),
-          serviceFee: 0,
-          discountAmount: state.getDiscountAmount(),
-          appliedVoucherCode: state.appliedVoucher?.code,
-          totalAmount: state.getTotalAmount(),
-          paymentMethod: 'QRIS',
-          paymentStatus: 'PAID',
-          orderStatus: 'PENDING',
-          createdAt: new Date().toISOString(),
-          posSyncStatus: 'SYNCED',
-        };
+        let newOrder = explicitOrder;
 
-        set({
+        if (!newOrder) {
+          const orderId = `KDN-${Date.now().toString().slice(-6)}`;
+          let fullNotes = state.orderNotes || '';
+          if (state.orderType === 'DELIVERY' && state.deliveryAddress) {
+            fullNotes = `Alamat: ${state.deliveryAddress}${state.addressNotes ? ` (Patokan: ${state.addressNotes})` : ''} | ${fullNotes}`;
+          }
+
+          newOrder = {
+            orderId,
+            customerName: state.customerName || 'Pelanggan Kedai',
+            customerEmail: state.customerEmail || OFFICIAL_STORE_EMAIL,
+            customerPhone: state.customerPhone || OFFICIAL_STORE_WA,
+            orderType: state.orderType,
+            deliveryCourier: state.orderType === 'DELIVERY' ? state.deliveryCourier : undefined,
+            orderNotes: fullNotes,
+            items: state.cartItems,
+            subtotal: state.getSubtotal(),
+            taxAmount: state.getTaxAmount(),
+            serviceFee: 0,
+            discountAmount: state.getDiscountAmount(),
+            appliedVoucherCode: state.appliedVoucher?.code,
+            totalAmount: state.getTotalAmount(),
+            paymentMethod: 'QRIS',
+            paymentStatus: 'PAID',
+            orderStatus: 'PENDING',
+            createdAt: new Date().toISOString(),
+            posSyncStatus: 'SYNCED',
+          };
+        }
+
+        set((s) => ({
           activeOrder: newOrder,
+          pendingPaymentOrder: null,
+          customerOrderIds: Array.from(new Set([...s.customerOrderIds, newOrder!.orderId])),
           cartItems: [],
           isCheckoutOpen: false,
           isOrderStatusOpen: true,
-        });
+        }));
 
         // 1. Sync Transaction to Master Supabase POS Database
         createSupabaseTransaction(newOrder).catch((err) => {
@@ -366,7 +464,7 @@ export const useCartStore = create<CartState>()(
             body: JSON.stringify(newOrder),
           });
           const emailData = await emailRes.json();
-          console.log('Instant Email & WhatsApp Dispatch Success:', emailData);
+          console.log('Instant Email Dispatch Success:', emailData);
         } catch (e) {
           console.error('Instant Dispatch Error:', e);
         }
@@ -384,9 +482,13 @@ export const useCartStore = create<CartState>()(
         customerName: state.customerName,
         customerEmail: state.customerEmail,
         customerPhone: state.customerPhone,
+        deliveryAddress: state.deliveryAddress,
+        addressNotes: state.addressNotes,
         orderNotes: state.orderNotes,
         appliedVoucher: state.appliedVoucher,
         activeOrder: state.activeOrder,
+        pendingPaymentOrder: state.pendingPaymentOrder,
+        customerOrderIds: state.customerOrderIds,
       }),
     }
   )

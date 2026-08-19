@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import { Plus, Minus, Flame, Star, Tag, Clock } from 'lucide-react';
 import { MenuItem } from '@/types/pos';
 import { useCartStore } from '@/store/useCartStore';
@@ -13,7 +13,7 @@ interface MenuItemCardProps {
   onOpenCustomize: (item: MenuItem) => void;
 }
 
-export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpenCustomize }) => {
+export const MenuItemCard: React.FC<MenuItemCardProps> = memo(({ item, onOpenCustomize }) => {
   const { cartItems, addToCart, updateQuantity } = useCartStore();
 
   // Find total quantity of this menu item in cart
@@ -52,46 +52,46 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpenCustomiz
   return (
     <Card
       onClick={() => onOpenCustomize(item)}
-      className="group relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between cursor-pointer p-0"
+      className="group relative bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer p-0 h-full"
     >
-      {/* Image Container */}
-      <div className="relative w-full aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-800">
+      {/* Image Container with compact aspect ratio */}
+      <div className="relative w-full aspect-square sm:aspect-[4/3] max-h-36 sm:max-h-52 overflow-hidden bg-slate-100 dark:bg-slate-800">
         <img
           src={item.image}
           alt={item.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
+          decoding="async"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-        {/* Tags Overlay using shadcn Badge */}
-        <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 z-10">
-          {item.tags?.map((tag) => {
-            let variant: "default" | "secondary" | "destructive" | "outline" = "default";
-            let customBg = "bg-slate-900/80 text-white";
+        {/* Tags Overlay */}
+        <div className="absolute top-2 left-2 flex flex-wrap gap-1 z-10">
+          {item.tags?.slice(0, 1).map((tag) => {
+            let customBg = 'bg-slate-900/80 text-white';
             let icon = null;
 
             if (tag === 'Terlaris') {
-              customBg = 'bg-amber-500 hover:bg-amber-600 text-white font-bold border-none';
-              icon = <Star className="w-3 h-3 fill-white" />;
+              customBg = 'bg-amber-500 text-white font-black';
+              icon = <Star className="w-2.5 h-2.5 fill-white" />;
             } else if (tag === 'Pedas') {
-              customBg = 'bg-red-600 hover:bg-red-700 text-white font-bold border-none';
-              icon = <Flame className="w-3 h-3 fill-white" />;
+              customBg = 'bg-red-600 text-white font-black';
+              icon = <Flame className="w-2.5 h-2.5 fill-white" />;
             } else if (tag === 'Rekomendasi') {
-              customBg = 'bg-orange-600 hover:bg-orange-700 text-white font-bold border-none';
-              icon = <Star className="w-3 h-3 fill-white" />;
+              customBg = 'bg-orange-600 text-white font-black';
+              icon = <Star className="w-2.5 h-2.5 fill-white" />;
             } else if (tag === 'Hemat') {
-              customBg = 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold border-none';
-              icon = <Tag className="w-3 h-3 fill-white" />;
+              customBg = 'bg-emerald-600 text-white font-black';
+              icon = <Tag className="w-2.5 h-2.5 fill-white" />;
             }
 
             return (
               <Badge
                 key={tag}
-                className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider backdrop-blur-md shadow-sm ${customBg}`}
+                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] uppercase tracking-wider shadow-xs border-none ${customBg}`}
               >
                 {icon}
-                {tag}
+                <span>{tag}</span>
               </Badge>
             );
           })}
@@ -99,70 +99,65 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpenCustomiz
 
         {/* Prep Time Badge */}
         {item.preparationTimeMinutes && (
-          <Badge className="absolute bottom-2.5 right-2.5 bg-black/70 backdrop-blur-md text-white border-none px-2 py-0.5 rounded-md text-[10px] flex items-center gap-1 font-semibold">
-            <Clock className="w-3 h-3 text-amber-400" />
-            <span>~{item.preparationTimeMinutes} mnt</span>
+          <Badge className="absolute bottom-1.5 right-1.5 bg-black/70 backdrop-blur-xs text-white border-none px-1.5 py-0.5 rounded text-[9px] flex items-center gap-0.5 font-semibold">
+            <Clock className="w-2.5 h-2.5 text-amber-400" />
+            <span>~{item.preparationTimeMinutes} m</span>
           </Badge>
         )}
       </div>
 
-      {/* Content Section with CardContent */}
-      <CardContent className="p-4 flex-1 flex flex-col justify-between">
+      {/* Content Section */}
+      <CardContent className="p-2.5 sm:p-3.5 flex-1 flex flex-col justify-between gap-1.5">
         <div>
-          <div className="flex justify-between items-start gap-2 mb-1">
-            <h3 className="font-extrabold text-sm md:text-base text-slate-900 dark:text-white group-hover:text-orange-600 transition-colors line-clamp-1">
-              {item.name}
-            </h3>
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-3 leading-relaxed">
+          <h3 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white group-hover:text-orange-600 transition-colors line-clamp-1 sm:line-clamp-2 leading-tight">
+            {item.name}
+          </h3>
+          <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 line-clamp-1 sm:line-clamp-2 mt-0.5 leading-snug">
             {item.description}
           </p>
         </div>
 
         {/* Price & Action Row */}
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between mt-auto">
-          <div>
-            <span className="text-[10px] font-semibold text-slate-400 block tracking-tight">
-              SKU: {item.posSku}
-            </span>
-            <span className="font-black text-sm md:text-base text-orange-600 dark:text-orange-400">
+        <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1 mt-auto">
+          <div className="min-w-0">
+            <span className="font-black text-xs sm:text-sm text-orange-600 dark:text-orange-400 truncate block">
               {formatRupiah(item.price)}
             </span>
           </div>
 
-          {/* Add / Quantity Button using shadcn Button UI */}
-          <div>
+          {/* Add / Quantity Button */}
+          <div className="shrink-0">
             {itemInCartCount > 0 && !hasOptions ? (
-              <div className="flex items-center gap-1.5 bg-orange-600 text-white p-1 rounded-xl shadow-md">
+              <div className="flex items-center gap-1 bg-orange-600 text-white p-0.5 rounded-lg shadow-sm">
                 <Button
                   size="icon"
                   variant="ghost"
                   onClick={handleMinusClick}
-                  className="w-7 h-7 hover:bg-orange-700 text-white rounded-lg p-0 h-7"
+                  className="w-5 h-5 sm:w-6 sm:h-6 hover:bg-orange-700 text-white rounded p-0"
                   aria-label="Kurangi Jumlah"
                 >
-                  <Minus className="w-3.5 h-3.5" />
+                  <Minus className="w-3 h-3" />
                 </Button>
-                <span className="font-extrabold text-xs px-1">{itemInCartCount}</span>
+                <span className="font-black text-[11px] sm:text-xs px-1">{itemInCartCount}</span>
                 <Button
                   size="icon"
                   variant="ghost"
                   onClick={handleAddClick}
-                  className="w-7 h-7 hover:bg-orange-700 text-white rounded-lg p-0 h-7"
+                  className="w-5 h-5 sm:w-6 sm:h-6 hover:bg-orange-700 text-white rounded p-0"
                   aria-label="Tambah Jumlah"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3 h-3" />
                 </Button>
               </div>
             ) : (
               <Button
                 onClick={handleAddClick}
-                className="flex items-center gap-1.5 px-3 py-1.5 h-9 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-md transition-all"
+                className="flex items-center gap-1 px-2 sm:px-2.5 h-6 sm:h-7 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-extrabold text-[10px] sm:text-xs rounded-lg shadow-xs transition-all"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>{hasOptions ? 'Kustom' : 'Tambah'}</span>
+                <Plus className="w-3 h-3" />
+                <span>{hasOptions ? 'Pilih' : 'Tambah'}</span>
                 {itemInCartCount > 0 && (
-                  <Badge className="ml-1 px-1.5 py-0.2 bg-white text-orange-600 rounded-full text-[10px] font-black border-none">
+                  <Badge className="ml-0.5 px-1 py-0 bg-white text-orange-600 rounded-full text-[9px] font-black border-none">
                     {itemInCartCount}
                   </Badge>
                 )}
@@ -173,4 +168,6 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpenCustomiz
       </CardContent>
     </Card>
   );
-};
+});
+
+MenuItemCard.displayName = 'MenuItemCard';

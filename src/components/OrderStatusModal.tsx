@@ -36,8 +36,36 @@ export const OrderStatusModal: React.FC = () => {
     setIsMounted(true);
     if (activeOrder) {
       setCurrentStatus(activeOrder.orderStatus || 'PENDING');
+
+      // Realtime listener for active order status changes from Kasir App
+      const channel = supabase
+        .channel(`order_status_sync_${activeOrder.orderId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'Transaction',
+            filter: `id=eq.${activeOrder.orderId}`,
+          },
+          (payload: any) => {
+            const updated = payload.new;
+            if (updated && updated.orderStatus) {
+              setCurrentStatus(updated.orderStatus);
+              useCartStore.setState((state) => ({
+                activeOrder: state.activeOrder ? { ...state.activeOrder, orderStatus: updated.orderStatus } : null,
+              }));
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [activeOrder]);
+
 
   // Realtime Timestamp Tracker (Seconds elapsed since order creation)
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
@@ -433,13 +461,47 @@ export const OrderStatusModal: React.FC = () => {
               <div>
                 <span className="text-gray-400 block font-medium">Metode Bayar:</span>
                 <span className="font-bold text-nyamleng-600 text-xs">
-                  QRIS Statis (LUNAS)
+                  QRIS Dinamis (LUNAS)
                 </span>
               </div>
               <div>
                 <span className="text-gray-400 block font-medium">Lokasi Kedai:</span>
                 <span className="font-bold text-charcoal text-xs">{STORE_LOCATION}</span>
               </div>
+            </div>
+
+            {/* Delivery Address & Notes if present */}
+            {activeOrder.orderNotes && (
+              <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900">
+                <span className="font-bold block text-amber-800">Catatan / Alamat Pengiriman:</span>
+                <p className="mt-0.5 font-medium">{activeOrder.orderNotes}</p>
+              </div>
+            )}
+
+            {/* Direct WhatsApp Confirmation Button */}
+            <div className="pt-2 border-t border-parchment-border">
+              <button
+                type="button"
+                onClick={() => {
+                  const storeWA = OFFICIAL_STORE_WA.replace(/\D/g, '').replace(/^0/, '62');
+                  const itemsText = (activeOrder.items || []).map(i => `• ${i.quantity}x ${i.menuItem.name} (Rp ${i.itemSubtotal.toLocaleString('id-ID')})`).join('\n');
+                  const waText = `Halo Kasir Kedai Nyamleng! Saya sudah melakukan checkout di Menu Digital:\n\n` +
+                    `📌 *No. Pesanan:* #${activeOrder.orderId}\n` +
+                    `👤 *Nama:* ${activeOrder.customerName}\n` +
+                    `📱 *No. WhatsApp:* ${activeOrder.customerPhone || '-'}\n` +
+                    `📦 *Tipe Pesanan:* ${activeOrder.orderType === 'DELIVERY' ? `Delivery (${activeOrder.deliveryCourier || 'Instant'})` : 'Takeaway (Ambil di Toko)'}\n` +
+                    (activeOrder.orderNotes ? `📍 *Alamat / Catatan:* ${activeOrder.orderNotes}\n` : '') +
+                    `\n🛒 *Rincian Menu:*\n${itemsText}\n\n` +
+                    `💰 *Total Tagihan:* Rp ${activeOrder.totalAmount.toLocaleString('id-ID')} (QRIS Lunas)\n\n` +
+                    `Mohon segera diproses ya kak, terima kasih!`;
+
+                  window.open(`https://wa.me/${storeWA}?text=${encodeURIComponent(waText)}`, '_blank');
+                }}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Kirim Konfirmasi Pesanan ke WhatsApp Kedai</span>
+              </button>
             </div>
 
             {/* Email Dispatch Info */}
@@ -457,7 +519,7 @@ export const OrderStatusModal: React.FC = () => {
         <div className="p-4 bg-white border-t border-parchment-border flex items-center justify-end pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <button
             onClick={() => toggleOrderStatus(false)}
-            className="w-full py-3.5 px-6 bg-nyamleng-600 hover:bg-nyamleng-700 active:scale-98 text-white font-extrabold text-sm rounded-2xl shadow-md transition-all cursor-pointer"
+            className="w-full py-3 px-6 bg-nyamleng-600 hover:bg-nyamleng-700 active:scale-98 text-white font-extrabold text-sm rounded-2xl shadow-md transition-all cursor-pointer"
           >
             Tutup Tracking &amp; Kembali ke Menu
           </button>
@@ -465,4 +527,5 @@ export const OrderStatusModal: React.FC = () => {
       </div>
     </div>
   );
+
 };

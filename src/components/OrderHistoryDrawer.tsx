@@ -36,19 +36,30 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
   useBodyScrollLock(isOpen);
   const [historyOrders, setHistoryOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { toggleOrderStatus } = useCartStore();
+  const { toggleOrderStatus, customerOrderIds } = useCartStore();
 
   useEffect(() => {
-    if (!isOpen || !currentUser) return;
+    if (!isOpen) return;
 
     const fetchCustomerHistory = async () => {
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('Transaction')
           .select('*, items:TransactionItem(*)')
-          .or(`customerEmail.eq.${currentUser.email},customerUserId.eq.${currentUser.id}`)
           .order('createdAt', { ascending: false });
+
+        if (currentUser?.email) {
+          query = query.or(`customerEmail.eq.${currentUser.email},customerUserId.eq.${currentUser.id}`);
+        } else if (customerOrderIds && customerOrderIds.length > 0) {
+          query = query.in('id', customerOrderIds);
+        } else {
+          setHistoryOrders([]);
+          setIsLoading(false);
+          return;
+        }
+
+        const { data, error } = await query;
 
         if (error) {
           console.error('[Fetch History Error]:', error.message);
@@ -63,7 +74,8 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
     };
 
     fetchCustomerHistory();
-  }, [isOpen, currentUser]);
+  }, [isOpen, currentUser, customerOrderIds]);
+
 
   const handleOrderClick = (order: any) => {
     const cartItems = (order.items || []).map((item: any) => ({
