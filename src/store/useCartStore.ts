@@ -124,7 +124,7 @@ interface CartState {
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
-      menuItems: MOCK_MENU_ITEMS,
+      menuItems: [],
       isLoadingMenu: false,
       cartItems: [],
       orderType: 'TAKEAWAY',

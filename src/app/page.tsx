@@ -56,14 +56,25 @@ export default function Home() {
   useEffect(() => {
     fetchMenuItems();
 
-    // Auto 3s realtime voucher sync poller
-    const voucherPoller = setInterval(() => {
-      fetchSupabaseVouchers().then((vouchers) => {
-        if (vouchers && Array.isArray(vouchers)) {
-          useCartStore.setState({ availableVouchers: vouchers });
-        }
-      }).catch(() => {});
+    // 1. Auto 3s realtime menu & voucher sync poller
+    const syncPoller = setInterval(() => {
+      fetchMenuItems().catch(() => {});
     }, 3000);
+
+    // 2. Supabase Realtime WebSocket Subscription for instant Kasir updates
+    const channel = supabase
+      .channel('realtime_menu_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'MenuItem' }, () => {
+        fetchMenuItems().catch(() => {});
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Voucher' }, () => {
+        fetchSupabaseVouchers().then((vouchers) => {
+          if (vouchers && Array.isArray(vouchers)) {
+            useCartStore.setState({ availableVouchers: vouchers });
+          }
+        }).catch(() => {});
+      })
+      .subscribe();
 
     // 1. Periksa apakah ada payload user dari Google OAuth Redirect URL (?login_success=true&user=...)
     let activeUser: CustomerUser | null = null;
@@ -172,12 +183,18 @@ export default function Home() {
     }).format(amount);
   };
 
-  // Filter menu items by selected category and search query
+  // Filter items based on active category & search query
   const filteredMenuItems = menuItems.filter((item) => {
     const matchesCategory =
-      selectedCategory && selectedCategory !== 'all'
-        ? item.categoryId === selectedCategory
-        : true;
+      selectedCategory === 'all'
+        ? true
+        : selectedCategory === 'promo'
+        ? (item.tags && (item.tags.includes('Hemat') || (item.tags as string[]).includes('Promo') || (item.tags as string[]).includes('Paket')))
+        : selectedCategory === 'camilan'
+        ? item.categoryId === 'camilan' || item.categoryId === 'snack'
+        : item.categoryId === selectedCategory;
+
+
     const matchesSearch = searchQuery
       ? item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -230,11 +247,15 @@ export default function Home() {
 
             {/* Empty State */}
             {filteredMenuItems.length === 0 ? (
-              <div className="bg-white rounded-3xl p-10 text-center border border-parchment-border space-y-3">
-                <Utensils className="w-12 h-12 text-gray-300 mx-auto" />
-                <h3 className="font-bold text-base text-charcoal">Menu Tidak Ditemukan</h3>
-                <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                  Maaf, tidak ada menu yang cocok dengan kata kunci pencarian "{searchQuery}". Coba kata kunci lain.
+              <div className="bg-white rounded-3xl p-10 text-center border border-parchment-border space-y-3 shadow-xs">
+                <Utensils className="w-12 h-12 text-nyamleng-300 mx-auto animate-bounce" />
+                <h3 className="font-bold text-base text-charcoal">
+                  {searchQuery ? 'Menu Tidak Ditemukan' : 'Menu Sedang Disiapkan Kasir'}
+                </h3>
+                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                  {searchQuery
+                    ? `Maaf, tidak ada menu yang cocok dengan kata kunci "${searchQuery}". Silakan coba kata kunci lain.`
+                    : 'Belum ada menu aktif di database. Daftar menu tersinkronisasi realtime dengan Kasir App dan akan otomatis muncul begitu ditambahkan!'}
                 </p>
               </div>
             ) : (

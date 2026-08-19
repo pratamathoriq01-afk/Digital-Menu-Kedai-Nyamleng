@@ -10,9 +10,13 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
       .eq('isActive', true)
       .order('createdAt', { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      console.log('[Supabase Menu] Falling back to mock menu items (Error or Empty):', error?.message);
-      return MOCK_MENU_ITEMS;
+    if (error) {
+      console.warn('[Supabase Menu Fetch Error]:', error.message);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      return [];
     }
 
     const mappedItems: MenuItem[] = data.map((item: any) => {
@@ -44,9 +48,10 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
     return mappedItems;
   } catch (err) {
     console.error('[Supabase Menu Exception]:', err);
-    return MOCK_MENU_ITEMS;
+    return [];
   }
 };
+
 
 
 export const fetchSupabaseVouchers = async (): Promise<any[]> => {
