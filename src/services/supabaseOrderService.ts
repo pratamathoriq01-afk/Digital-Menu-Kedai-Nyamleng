@@ -48,15 +48,30 @@ export const createSupabaseTransaction = async (order: OrderPayload) => {
     }
 
     // 2. Insert into "TransactionItem" table for each item ordered
-    const itemRecords = order.items.map((item, idx) => ({
-      id: `${order.orderId}-item-${idx + 1}`,
-      transactionId: order.orderId,
-      menuItemId: item.menuItem.id,
-      nameSnapshot: item.menuItem.name,
-      priceSnapshot: item.unitPrice,
-      hppSnapshot: (item.menuItem as any).hpp || Math.round(item.unitPrice * 0.5),
-      qty: item.quantity,
-    }));
+    const itemRecords = order.items.map((item, idx) => {
+      const addOnsParts: string[] = [];
+      if (item.selectedAddOns && item.selectedAddOns.length > 0) {
+        addOnsParts.push(...item.selectedAddOns.map(a => `${a.optionName} (+Rp${a.price.toLocaleString('id-ID')})`));
+      }
+      if (item.selectedVariants && item.selectedVariants.length > 0) {
+        addOnsParts.push(...item.selectedVariants.map(v => `${v.groupName}: ${v.optionName}`));
+      }
+      if (item.itemNotes) {
+        addOnsParts.push(`Catatan: ${item.itemNotes}`);
+      }
+      const addOnsSnapshot = addOnsParts.length > 0 ? addOnsParts.join(' | ') : null;
+
+      return {
+        id: `${order.orderId}-item-${idx + 1}`,
+        transactionId: order.orderId,
+        menuItemId: item.menuItem.id,
+        nameSnapshot: item.menuItem.name,
+        priceSnapshot: item.unitPrice,
+        hppSnapshot: (item.menuItem as any).hpp || Math.round(item.unitPrice * 0.5),
+        qty: item.quantity,
+        addOnsSnapshot,
+      };
+    });
 
     const { error: itemsError } = await supabase
       .from('TransactionItem')

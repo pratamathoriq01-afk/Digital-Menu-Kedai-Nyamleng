@@ -69,6 +69,10 @@ export default function Home() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'MenuItem' }, () => {
         fetchMenuItems().catch(() => {});
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'AddOn' }, () => {
+        // Re-fetch menu items so add-ons are re-attached dynamically
+        fetchMenuItems().catch(() => {});
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'Voucher' }, () => {
         fetchSupabaseVouchers().then((vouchers) => {
           if (vouchers && Array.isArray(vouchers)) {
