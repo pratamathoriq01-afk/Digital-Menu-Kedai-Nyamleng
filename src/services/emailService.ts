@@ -254,8 +254,8 @@ export const sendOrderReceiptEmail = async (order: OrderPayload) => {
   const apiKey = getStoreResendKey().trim().replace(/^["']|["']$/g, '');
   const recipientEmail = (order.customerEmail || OFFICIAL_STORE_EMAIL).trim();
 
-  const gmailUser = (process.env.GMAIL_USER || OFFICIAL_STORE_EMAIL || 'kedainyamleng03@gmail.com').trim();
-  const gmailPass = (process.env.GMAIL_APP_PASSWORD || '').trim();
+  const gmailUser = (process.env.GMAIL_USER || process.env.GMAIL_USER_KEDAI || OFFICIAL_STORE_EMAIL || 'kedainyamleng03@gmail.com').trim();
+  const gmailPass = (process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_APP_PASSWORD_KEDAI || '').trim();
 
   const dispatchResults: any = {
     recipientEmail,
