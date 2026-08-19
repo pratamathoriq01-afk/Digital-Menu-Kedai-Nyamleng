@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
-import { MenuItem, AddOnOption, AddOnGroup } from '@/types/pos';
+import { MenuItem, AddOnOption, AddOnGroup, StoreSettings, VariantGroup } from '@/types/pos';
 
 // Mapping kategori Kasir App → slug yang digunakan di Menu Digital
 const CATEGORY_SLUG_MAP: Record<string, string> = {
@@ -19,9 +19,7 @@ const CATEGORY_SLUG_MAP: Record<string, string> = {
 
 export const mapCategoryToSlug = (rawCategory: string): string => {
   const lower = (rawCategory || '').toLowerCase().trim();
-  // Direct match
   if (CATEGORY_SLUG_MAP[lower]) return CATEGORY_SLUG_MAP[lower];
-  // Partial match fallback
   if (lower.includes('ayam')) return 'ayam-nyamleng';
   if (lower.includes('ikan')) return 'ikan-nyamleng';
   if (lower.includes('minum')) return 'minuman';
@@ -29,7 +27,84 @@ export const mapCategoryToSlug = (rawCategory: string): string => {
   if (lower.includes('cemil') || lower.includes('snack')) return 'snack';
   if (lower.includes('paket') || lower.includes('hemat')) return 'paket-hemat';
   if (lower.includes('dessert')) return 'dessert';
-  return 'makanan'; // default fallback
+  return 'makanan';
+};
+
+// Default fallback StoreSettings
+export const DEFAULT_STORE_SETTINGS: StoreSettings = {
+  id: 'default',
+  storeName: 'Kedai Nyamleng',
+  address: 'Jl. Laksada Adi Sucipto Gg.14 No 42, Kelurahan Blimbing, Kecamatan Blimbing, Kota Malang, Jawa Timur',
+  whatsapp: '085113661387',
+  city: 'Kota Malang',
+  province: 'Jawa Timur',
+  isOpen: true,
+  openTime: '08:00',
+  closeTime: '22:00',
+  isAutoSchedule: true,
+  closedReason: 'Kedai sedang istirahat / tutup sementara.',
+};
+
+/**
+ * Fetch Store Settings (Operating Hours, Open/Closed Switch, Status Message)
+ */
+export const fetchSupabaseStoreSettings = async (): Promise<StoreSettings> => {
+  try {
+    const { data, error } = await supabase
+      .from('StoreSettings')
+      .select('*')
+      .eq('id', 'default')
+      .maybeSingle();
+
+    if (error || !data) {
+      console.warn('[Supabase StoreSettings Fetch Error / Empty]:', error?.message);
+      return DEFAULT_STORE_SETTINGS;
+    }
+
+    return {
+      id: data.id || 'default',
+      storeName: data.storeName || DEFAULT_STORE_SETTINGS.storeName,
+      address: data.address || DEFAULT_STORE_SETTINGS.address,
+      whatsapp: data.whatsapp || DEFAULT_STORE_SETTINGS.whatsapp,
+      city: data.city || DEFAULT_STORE_SETTINGS.city,
+      province: data.province || DEFAULT_STORE_SETTINGS.province,
+      isOpen: data.isOpen !== undefined ? Boolean(data.isOpen) : true,
+      openTime: data.openTime || '08:00',
+      closeTime: data.closeTime || '22:00',
+      isAutoSchedule: data.isAutoSchedule !== undefined ? Boolean(data.isAutoSchedule) : true,
+      closedReason: data.closedReason || DEFAULT_STORE_SETTINGS.closedReason,
+      updatedAt: data.updatedAt,
+    };
+  } catch (err) {
+    console.error('[Supabase StoreSettings Exception]:', err);
+    return DEFAULT_STORE_SETTINGS;
+  }
+};
+
+/**
+ * Update Store Settings in Supabase
+ */
+export const updateSupabaseStoreSettings = async (settings: Partial<StoreSettings>): Promise<boolean> => {
+  try {
+    const payload = {
+      id: 'default',
+      ...settings,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('StoreSettings')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      console.error('[Supabase StoreSettings Update Error]:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[Supabase StoreSettings Update Exception]:', err);
+    return false;
+  }
 };
 
 export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
@@ -50,7 +125,7 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
       return [];
     }
 
-    // Fetch all active add-ons from Supabase to attach to menu items
+    // Fetch all active add-ons from Supabase
     const { data: addOnsData } = await supabase
       .from('AddOn')
       .select('*')
@@ -62,19 +137,18 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
     const mappedItems: MenuItem[] = data.map((item: any) => {
       const categorySlug = mapCategoryToSlug(item.category || '');
 
-      // Filter add-ons applicable to this menu item:
-      // "Semua" matches all, or category matches exactly
+      // Match AddOns for this menu item
       const matchingAddOns = allAddOns.filter((addon) => {
         if (!addon.isActive) return false;
         if (!addon.category || addon.category === 'Semua') return true;
         return addon.category === item.category;
       });
 
-      // Build addOnGroups from Supabase AddOn data (flat list → single group)
+      // Build Add-On group
       const addOnGroups: AddOnGroup[] = matchingAddOns.length > 0 ? [
         {
           id: 'addon-group-1',
-          name: 'Tambahan & Pilihan',
+          name: 'Pilihan Tambahan / Topping',
           maxSelect: matchingAddOns.length,
           options: matchingAddOns.map((addon) => ({
             id: addon.id,
@@ -84,6 +158,36 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
         },
       ] : [];
 
+      // Smart Default Variant Groups based on Category
+      const isDrink = categorySlug === 'minuman';
+      const isFood = ['ayam-nyamleng', 'ikan-nyamleng', 'alacarte', 'makanan', 'paket-hemat'].includes(categorySlug);
+
+      const variantGroups: VariantGroup[] = [];
+
+      if (isFood) {
+        variantGroups.push({
+          id: 'var-pedas',
+          name: 'Level Kepedasan Sambal',
+          required: true,
+          options: [
+            { id: 'p1', name: 'Level 1: Sedang', priceModifier: 0 },
+            { id: 'p2', name: 'Level 2: Pedas Nyamleng (Favorit)', priceModifier: 0 },
+            { id: 'p3', name: 'Level 3: Ekstra Pedas Gila', priceModifier: 2000 },
+          ],
+        });
+      } else if (isDrink) {
+        variantGroups.push({
+          id: 'var-suhu',
+          name: 'Suhu Minuman',
+          required: true,
+          options: [
+            { id: 'd1', name: 'Es Dingin Segar', priceModifier: 0 },
+            { id: 'd2', name: 'Hangat / Panas', priceModifier: 0 },
+            { id: 'd3', name: 'Suhu Normal (Tanpa Es)', priceModifier: 0 },
+          ],
+        });
+      }
+
       return {
         id: item.id,
         posSku: item.id ? item.id.slice(-6).toUpperCase() : 'SKU-001',
@@ -91,14 +195,12 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
         description: item.description || `Menu pilihan khas Kedai Nyamleng - ${item.name}.`,
         price: Number(item.price),
         categoryId: categorySlug,
-        // Use actual image from Kasir App, or a smart fallback per category
         image: item.imageUrl || getFallbackImage(categorySlug),
         tags: ['Terlaris'],
         isAvailable: item.isActive,
         preparationTimeMinutes: 7,
-        variantGroups: [],
+        variantGroups,
         addOnGroups,
-        // Store raw category for filtering
         _rawCategory: item.category,
       } as MenuItem & { _rawCategory: string };
     });
@@ -123,7 +225,6 @@ const getFallbackImage = (categorySlug: string): string => {
   };
   return images[categorySlug] || images['makanan'];
 };
-
 
 export const fetchSupabaseVouchers = async (): Promise<any[]> => {
   try {
@@ -156,7 +257,6 @@ export const fetchSupabaseVouchers = async (): Promise<any[]> => {
   }
 };
 
-// Fetch all active add-ons for standalone usage (e.g. real-time reload)
 export const fetchSupabaseAddOns = async (): Promise<any[]> => {
   try {
     const { data, error } = await supabase

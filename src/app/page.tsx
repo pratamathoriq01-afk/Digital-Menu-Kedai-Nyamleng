@@ -1,6 +1,6 @@
 'use client';
 
-import { fetchSupabaseVouchers } from '@/services/supabaseMenuService';
+import { fetchSupabaseVouchers, fetchSupabaseStoreSettings } from '@/services/supabaseMenuService';
 import React, { useState, useEffect } from 'react';
 
 import { 
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { CategoryNav } from '@/components/CategoryNav';
+import { StoreClosedBanner } from '@/components/StoreClosedBanner';
 import { MenuItemCard } from '@/components/MenuItemCard';
 import { ItemCustomizeModal } from '@/components/ItemCustomizeModal';
 import { CartDrawer } from '@/components/CartDrawer';
@@ -72,6 +73,13 @@ export default function Home() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'AddOn' }, () => {
         // Re-fetch menu items so add-ons are re-attached dynamically
         fetchMenuItems().catch(() => {});
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'StoreSettings' }, () => {
+        fetchSupabaseStoreSettings().then((settings) => {
+          if (settings) {
+            useCartStore.setState({ storeSettings: settings });
+          }
+        }).catch(() => {});
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'Voucher' }, () => {
         fetchSupabaseVouchers().then((vouchers) => {
@@ -229,6 +237,9 @@ export default function Home() {
       {/* Main Container */}
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-6 py-4 sm:py-6 space-y-6">
         
+        {/* Realtime Store Closed Alert Banner */}
+        <StoreClosedBanner />
+
         {/* Category Navigation Bar */}
         <CategoryNav />
 

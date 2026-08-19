@@ -26,6 +26,8 @@ export const Header: React.FC<HeaderProps> = ({
     setOrderType, 
     searchQuery, 
     setSearchQuery,
+    storeSettings,
+    isStoreOpen,
   } = useCartStore();
 
   const [timeString, setTimeString] = useState<string>('');
@@ -148,10 +150,22 @@ export const Header: React.FC<HeaderProps> = ({
               <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
               Rasa Nyamleng Asli
             </span>
-            <span className="flex items-center gap-1 bg-white/80 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-parchment-border shadow-xs text-[11px]">
-              <Clock className="w-3 h-3 text-emerald-600" />
-              Buka: 08:00 - 22:00 WIB
+            
+            {/* Dynamic Store Hours & Live Open/Close Status Badge */}
+            <span className={`flex items-center gap-1.5 backdrop-blur-md px-3 py-0.5 rounded-full border shadow-xs text-[11px] font-bold transition-all ${
+              isStoreOpen() 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                : 'bg-rose-50 text-rose-700 border-rose-200'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${isStoreOpen() ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+              <Clock className="w-3 h-3" />
+              <span>
+                {isStoreOpen() 
+                  ? `Buka: ${storeSettings?.openTime || '08:00'} - ${storeSettings?.closeTime || '22:00'} WIB` 
+                  : `Toko Tutup (Buka ${storeSettings?.openTime || '08:00'} WIB)`}
+              </span>
             </span>
+
             <span className="flex items-center gap-1 bg-white/80 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-parchment-border shadow-xs text-[11px]">
               <ShieldCheck className="w-3 h-3 text-nyamleng-500" />
               POS Realtime Sync

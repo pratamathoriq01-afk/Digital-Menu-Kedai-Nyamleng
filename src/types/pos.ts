@@ -17,6 +17,21 @@ export const OFFICIAL_STORE_WA = process.env.NEXT_PUBLIC_STORE_WA || '0851136613
 export const OFFICIAL_STORE_EMAIL = process.env.NEXT_PUBLIC_STORE_EMAIL || '';
 export const STORE_LOCATION = process.env.NEXT_PUBLIC_STORE_LOCATION || 'Jl. Laksada Adi Sucipto Gg.14 No 42, Kelurahan Blimbing, Kecamatan Blimbing, Kota Malang, Jawa Timur';
 
+export interface StoreSettings {
+  id: string;
+  storeName: string;
+  address: string;
+  whatsapp: string;
+  city: string;
+  province: string;
+  isOpen: boolean;
+  openTime: string; // e.g. '08:00'
+  closeTime: string; // e.g. '22:00'
+  isAutoSchedule: boolean;
+  closedReason?: string | null;
+  updatedAt?: string | Date;
+}
+
 export interface Voucher {
   code: string;
   title: string;

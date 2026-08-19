@@ -245,6 +245,14 @@ export const CheckoutModal: React.FC = () => {
 
   const handleProceedToQRISStep = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const { isStoreOpen, storeSettings } = useCartStore.getState();
+    if (!isStoreOpen()) {
+      const reason = storeSettings?.closedReason || 'Kedai saat ini sedang tutup / di luar jam operasional.';
+      alert(`Mohon maaf, toko sedang tutup.\n\n${reason}\n\nJam Buka: ${storeSettings?.openTime || '08:00'} - ${storeSettings?.closeTime || '22:00'} WIB`);
+      return;
+    }
+
     if (!nameInput.trim()) {
       alert('Tolong isi nama Anda terlebih dahulu');
       return;

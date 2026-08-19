@@ -11,11 +11,18 @@ import {
   PaymentMethod, 
   SelectedAddOn, 
   SelectedVariant,
+  StoreSettings,
   Voucher 
 } from '@/types/pos';
 import { supabase } from '@/lib/supabaseClient';
 import { createSupabaseTransaction } from '@/services/supabaseOrderService';
-import { fetchSupabaseMenuItems, fetchSupabaseVouchers } from '@/services/supabaseMenuService';
+import { 
+  fetchSupabaseMenuItems, 
+  fetchSupabaseVouchers,
+  fetchSupabaseStoreSettings,
+  updateSupabaseStoreSettings,
+  DEFAULT_STORE_SETTINGS
+} from '@/services/supabaseMenuService';
 
 
 export const INITIAL_VOUCHERS: Voucher[] = [
@@ -76,6 +83,12 @@ interface CartState {
   customerOrderIds: string[];
   searchQuery: string;
   selectedCategory: string;
+
+  // Store Settings (Operating Hours & Open/Close Control)
+  storeSettings: StoreSettings;
+  fetchStoreSettings: () => Promise<void>;
+  updateStoreSettings: (settings: Partial<StoreSettings>) => Promise<boolean>;
+  isStoreOpen: () => boolean;
 
   // Voucher State
   appliedVoucher: Voucher | null;
@@ -158,17 +171,80 @@ export const useCartStore = create<CartState>()(
 
       appliedVoucher: null,
       availableVouchers: INITIAL_VOUCHERS,
+      storeSettings: DEFAULT_STORE_SETTINGS,
+
+      fetchStoreSettings: async () => {
+        try {
+          const settings = await fetchSupabaseStoreSettings();
+          set({ storeSettings: settings });
+        } catch (e) {
+          console.error('[fetchStoreSettings error]:', e);
+        }
+      },
+
+      updateStoreSettings: async (newSettings) => {
+        try {
+          const current = get().storeSettings;
+          const merged = { ...current, ...newSettings };
+          set({ storeSettings: merged });
+          const success = await updateSupabaseStoreSettings(merged);
+          return success;
+        } catch (e) {
+          console.error('[updateStoreSettings error]:', e);
+          return false;
+        }
+      },
+
+      isStoreOpen: () => {
+        const settings = get().storeSettings;
+        if (!settings) return true;
+        // If manual override closed
+        if (!settings.isOpen) return false;
+        // If not using auto schedule, follow manual isOpen
+        if (!settings.isAutoSchedule) return settings.isOpen;
+
+        // Auto schedule checking against WIB (UTC+7)
+        try {
+          const now = new Date();
+          const options: Intl.DateTimeFormatOptions = { 
+            timeZone: 'Asia/Jakarta', 
+            hour12: false, 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          };
+          const wibTimeString = new Intl.DateTimeFormat('id-ID', options).format(now);
+          const [currentH, currentM] = wibTimeString.split(':').map(Number);
+          const currentMins = (currentH || 0) * 60 + (currentM || 0);
+
+          const [openH, openM] = (settings.openTime || '08:00').split(':').map(Number);
+          const openMins = (openH || 0) * 60 + (openM || 0);
+
+          const [closeH, closeM] = (settings.closeTime || '22:00').split(':').map(Number);
+          const closeMins = (closeH || 0) * 60 + (closeM || 0);
+
+          if (openMins <= closeMins) {
+            return currentMins >= openMins && currentMins < closeMins;
+          } else {
+            // Overnight window (e.g. 18:00 - 02:00)
+            return currentMins >= openMins || currentMins < closeMins;
+          }
+        } catch {
+          return settings.isOpen;
+        }
+      },
 
       fetchMenuItems: async () => {
         set({ isLoadingMenu: true });
         try {
-          const [items, vouchers] = await Promise.all([
+          const [items, vouchers, settings] = await Promise.all([
             fetchSupabaseMenuItems(),
             fetchSupabaseVouchers(),
+            fetchSupabaseStoreSettings(),
           ]);
           set({
             menuItems: items,
             availableVouchers: vouchers && vouchers.length > 0 ? vouchers : get().availableVouchers,
+            storeSettings: settings || get().storeSettings,
             isLoadingMenu: false,
           });
         } catch (e) {

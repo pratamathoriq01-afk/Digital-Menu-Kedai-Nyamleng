@@ -19,6 +19,7 @@ import { CustomerUser, setStoredCustomerUser } from '@/services/authService';
 import { supabase } from '@/lib/supabaseClient';
 import { useCartStore } from '@/store/useCartStore';
 import { useBodyScrollLock } from '@/lib/scrollLock';
+import { StoreStatusModal } from './StoreStatusModal';
 
 interface OrderHistoryDrawerProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
   useBodyScrollLock(isOpen);
   const [historyOrders, setHistoryOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isStoreStatusModalOpen, setIsStoreStatusModalOpen] = useState(false);
   const { toggleOrderStatus, customerOrderIds } = useCartStore();
 
   useEffect(() => {
@@ -262,15 +264,31 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
           )}
         </div>
 
-        {/* Footer Store Info */}
+        {/* Footer Store Info & Quick Store Controls */}
         <div className="p-4 bg-white border-t border-parchment-border text-[11px] text-gray-500 space-y-2">
-          <div className="flex items-center gap-2 font-bold text-charcoal">
-            <Store className="w-4 h-4 text-nyamleng-600" />
-            <span>Kedai Nyamleng Malang</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold text-charcoal">
+              <Store className="w-4 h-4 text-nyamleng-600" />
+              <span>Kedai Nyamleng Malang</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsStoreStatusModalOpen(true)}
+              className="text-[10px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+            >
+              ⚙️ Atur Jam Toko
+            </button>
           </div>
-          <p className="text-[10px]">Kota Malang, Jawa Timur • Open 09:00 - 22:00 WIB</p>
+          <p className="text-[10px]">Kota Malang, Jawa Timur • Terintegrasi Realtime POS</p>
         </div>
       </div>
+
+      {/* Store Status Control Modal */}
+      <StoreStatusModal
+        isOpen={isStoreStatusModalOpen}
+        onClose={() => setIsStoreStatusModalOpen(false)}
+      />
     </div>
   );
 };
