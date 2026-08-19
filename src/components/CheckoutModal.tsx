@@ -17,13 +17,17 @@ import {
   ArrowLeft,
   Check,
   Edit3,
-  Lock
+  Lock,
+  Copy,
+  Clock,
+  Sparkles
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
 import { DeliveryCourier, OFFICIAL_STORE_WA } from '@/types/pos';
 import { PromoVoucherModal } from './PromoVoucherModal';
 import { getStoredCustomerUser } from '@/services/authService';
 import { useBodyScrollLock } from '@/lib/scrollLock';
+import { generateDynamicQRIS } from '@/lib/qrisHelper';
 
 export const CheckoutModal: React.FC = () => {
   const {
@@ -55,14 +59,13 @@ export const CheckoutModal: React.FC = () => {
   const [phoneInput, setPhoneInput] = useState(customerPhone || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSynced, setIsGoogleSynced] = useState(false);
-  const [autoDetectStatus, setAutoDetectStatus] = useState<string>('Menunggu Transfer QRIS...');
+  const [copiedNominal, setCopiedNominal] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number>(900); // 15 menit countdown
 
   const OFFICIAL_QRIS_PAYLOAD = 
     process.env.NEXT_PUBLIC_QRIS_STRING || 
     process.env.NEXT_PUBLIC_QRIS_STRING_KEDAI ||
     '00020101021126610014COM.GO-JEK.WWW01189360091439239121390210G9239121390303UMI51440014ID.CO.QRIS.WWW0215ID10265488213900303UMI5204581253033605802ID5924Kedai Nyamleng, BLIMBING6006MALANG61056512662070703A0163040BF6';
-
-  const qrisImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(OFFICIAL_QRIS_PAYLOAD)}`;
 
   // Auto-fill Customer Profile from Google / Apple Auth Session on Mount/Open
   useEffect(() => {
@@ -76,31 +79,18 @@ export const CheckoutModal: React.FC = () => {
     }
   }, [isCheckoutOpen]);
 
-  // Automated Payment Detection Radar Listener
+  // Payment Countdown Timer when in QRIS step
   useEffect(() => {
-    if (checkoutStep !== 'QRIS_PAYMENT' || isSubmitting) return;
+    if (checkoutStep !== 'QRIS_PAYMENT') {
+      setTimeLeft(900);
+      return;
+    }
 
-    let isMounted = true;
-    setAutoDetectStatus('📡 Sistem Otomatis Mendeteksi Pembayaran QRIS Anda...');
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
 
-    const timer = setTimeout(async () => {
-      if (!isMounted) return;
-      setAutoDetectStatus('✅ Pembayaran QRIS Terverifikasi! Mengalihkan Pesanan...');
-      try {
-        setIsSubmitting(true);
-        await submitOrder();
-        setCheckoutStep('FORM');
-      } catch (err) {
-        console.error('Order Submission Error:', err);
-      } finally {
-        setIsSubmitting(false);
-      }
-    }, 4500);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
+    return () => clearInterval(timer);
   }, [checkoutStep]);
 
   if (!isCheckoutOpen) return null;
@@ -110,12 +100,28 @@ export const CheckoutModal: React.FC = () => {
   const tax = getTaxAmount();
   const discount = getDiscountAmount();
 
+  // Generate Dynamic QRIS with exact order total
+  const dynamicQRISPayload = generateDynamicQRIS(OFFICIAL_QRIS_PAYLOAD, total);
+  const qrisImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=450x450&data=${encodeURIComponent(dynamicQRISPayload)}`;
+
   const formatRupiah = (amount: number) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleCopyNominal = () => {
+    navigator.clipboard.writeText(Math.round(total).toString());
+    setCopiedNominal(true);
+    setTimeout(() => setCopiedNominal(false), 2000);
   };
 
   const handleDownloadQRIS = async () => {
@@ -125,7 +131,7 @@ export const CheckoutModal: React.FC = () => {
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = 'Kedai_Nyamleng_QRIS_Blimbing_Malang.png';
+      link.download = `Kedai_Nyamleng_QRIS_Rp${Math.round(total)}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -197,7 +203,7 @@ export const CheckoutModal: React.FC = () => {
               )}
               <div>
                 <h2 className="font-extrabold text-base">
-                  {checkoutStep === 'FORM' ? 'Detail Pesanan & Promo' : 'Scan Pembayaran QRIS'}
+                  {checkoutStep === 'FORM' ? 'Detail Pesanan & Promo' : 'Scan Pembayaran QRIS Dinamis'}
                 </h2>
                 <p className="text-[11px] text-gray-300">
                   Mode: <span className="text-amber-300 font-bold">{orderType === 'TAKEAWAY' ? 'Takeaway (Ambil di Toko)' : 'Delivery (Kurir Antar)'}</span>
@@ -424,36 +430,58 @@ export const CheckoutModal: React.FC = () => {
             </form>
           )}
 
-          {/* STEP 2: DEDICATED AUTOMATED QRIS PAYMENT MODAL STEP */}
+          {/* STEP 2: DEDICATED DYNAMIC QRIS PAYMENT GATEWAY STEP */}
           {checkoutStep === 'QRIS_PAYMENT' && (
             <div className="p-5 overflow-y-auto space-y-4 flex-1 text-charcoal text-center">
               
-              {/* Total Final Payment Banner */}
+              {/* Total Final Payment Banner with Live Dynamic Indicator */}
               <div className="p-4 bg-gradient-to-r from-nyamleng-500 to-nyamleng-600 text-white rounded-2xl shadow-md space-y-1">
-                <span className="text-[11px] text-amber-200 font-bold uppercase tracking-wider block">
-                  Total Nominal QRIS yang Harus Dibayar
-                </span>
-                <h3 className="text-2xl font-black">{formatRupiah(total)}</h3>
-                {discount > 0 && (
-                  <p className="text-[11px] text-emerald-200 font-medium">
-                    (Hemat {formatRupiah(discount)} via Voucher {appliedVoucher?.code})
-                  </p>
-                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-amber-200 font-bold uppercase tracking-wider">
+                    Total Nominal Tagihan QRIS
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 backdrop-blur-xs px-2 py-0.5 rounded-full text-white">
+                    <Clock className="w-3 h-3 text-amber-300" />
+                    <span>Batas Waktu: {formatTimer(timeLeft)}</span>
+                  </span>
+                </div>
+
+                <h3 className="text-3xl font-black tracking-tight">{formatRupiah(total)}</h3>
+                
+                <div className="pt-1 flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyNominal}
+                    className="inline-flex items-center gap-1 text-[11px] bg-white/15 hover:bg-white/25 active:scale-95 px-2.5 py-1 rounded-lg transition-all font-semibold cursor-pointer"
+                  >
+                    {copiedNominal ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-300" />
+                        <span className="text-emerald-200 font-bold">Nominal Tersalin!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Salin Nominal Pas</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
-              {/* Automated Realtime Radar Scanner Indicator */}
-              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-2xl text-xs flex items-center justify-center gap-2 font-extrabold text-emerald-800 shadow-sm animate-pulse">
-                <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
-                <span>{autoDetectStatus}</span>
+              {/* Dynamic QRIS Notice Badge */}
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 flex items-center justify-center gap-1.5 font-bold">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                <span>QRIS Dinamis Aktif: Nominal Rp {Math.round(total).toLocaleString('id-ID')} otomatis terisi saat di-scan!</span>
               </div>
 
-              {/* QRIS Statis Graphic Preview */}
+              {/* QRIS Graphic Preview */}
               <div className="p-4 bg-nyamleng-50 rounded-2xl border border-nyamleng-200 space-y-3">
-                <div className="inline-block p-2 bg-white rounded-2xl shadow-xs border border-parchment-border">
+                <div className="inline-block p-2 bg-white rounded-2xl shadow-sm border border-parchment-border">
                   <img
                     src={qrisImageUrl}
-                    alt="QRIS Statis Official Kedai Nyamleng Blimbing Malang"
-                    className="w-48 h-48 mx-auto object-contain"
+                    alt={`QRIS Dinamis Kedai Nyamleng Rp ${Math.round(total)}`}
+                    className="w-52 h-52 mx-auto object-contain"
                   />
                 </div>
                 
@@ -462,7 +490,7 @@ export const CheckoutModal: React.FC = () => {
                     Kedai Nyamleng, BLIMBING - MALANG
                   </h4>
                   <p className="text-[11px] text-gray-600 mt-0.5 font-medium">
-                    Dapat di-scan via GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, BRI, BNI &amp; All M-Banking
+                    Support All E-Wallet &amp; M-Banking (GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, BRI, BNI)
                   </p>
                 </div>
 
@@ -473,38 +501,51 @@ export const CheckoutModal: React.FC = () => {
                     className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-nyamleng-500 hover:bg-nyamleng-600 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Unduh Gambar QRIS Official (PNG)</span>
+                    <span>Unduh Gambar QRIS (PNG)</span>
                   </button>
                 </div>
               </div>
 
               {/* Instructions */}
-              <div className="p-3 bg-parchment-soft rounded-xl border border-parchment-border text-left text-[11px] text-gray-600 space-y-1">
-                <p className="font-bold text-charcoal">Cara Pembayaran QRIS:</p>
+              <div className="p-3.5 bg-parchment-soft rounded-xl border border-parchment-border text-left text-[11px] text-gray-600 space-y-1.5">
+                <p className="font-bold text-charcoal">Panduan Pembayaran QRIS:</p>
                 <ol className="list-decimal list-inside space-y-0.5">
-                  <li>Scan QR Code di atas menggunakan aplikasi M-Banking / E-Wallet Anda.</li>
-                  <li>Atau klik <strong>"Unduh Gambar QRIS"</strong> lalu upload pada fitur <i>Scan dari Galeri</i>.</li>
-                  <li>Pastikan nominal transfer pas sebesar <strong>{formatRupiah(total)}</strong>.</li>
-                  <li>Sistem akan <strong>otomatis mendeteksi transfer Anda</strong> dan langsung membawa Anda ke halaman status dapur.</li>
+                  <li>Buka aplikasi M-Banking atau E-Wallet pilihan Anda.</li>
+                  <li>Scan QR Code di atas (atau pilih gambar dari galeri HP).</li>
+                  <li>Nominal <strong>{formatRupiah(total)}</strong> akan otomatis terisi di aplikasi Anda.</li>
+                  <li>Selesaikan transfer, lalu tekan tombol <strong>"Saya Sudah Bayar via QRIS"</strong> di bawah.</li>
                 </ol>
               </div>
 
-              {/* Auto Status Processing Footer */}
+              {/* Verified Payment Confirmation Button */}
               <div className="pt-2 space-y-2">
-                {isSubmitting ? (
-                  <div className="w-full py-3.5 px-4 bg-emerald-600 text-white font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Menyinkronkan Pembayaran &amp; Membuka Dapur...</span>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setCheckoutStep('FORM')}
-                    className="text-xs font-bold text-gray-500 hover:text-charcoal underline cursor-pointer"
-                  >
-                    Ubah Detail Pesanan
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleFinalConfirmPaid}
+                  disabled={isSubmitting}
+                  className="w-full py-4 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Memverifikasi Pembayaran &amp; Mengirim E-Receipt...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5" />
+                      <span>Saya Sudah Bayar via QRIS ({formatRupiah(total)})</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCheckoutStep('FORM')}
+                  disabled={isSubmitting}
+                  className="text-xs font-bold text-gray-500 hover:text-charcoal underline cursor-pointer"
+                >
+                  Kembali &amp; Ubah Pesanan
+                </button>
               </div>
 
             </div>
@@ -518,3 +559,4 @@ export const CheckoutModal: React.FC = () => {
     </>
   );
 };
+
