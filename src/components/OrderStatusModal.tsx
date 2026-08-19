@@ -20,8 +20,11 @@ import { OFFICIAL_STORE_WA, OrderStatus, STORE_LOCATION } from '@/types/pos';
 import { supabase } from '@/lib/supabaseClient';
 import { useBodyScrollLock } from '@/lib/scrollLock';
 
+// Status values from Kasir App that mean the order is fully completed
+const KASIR_COMPLETED_STATUSES = ['COMPLETED', 'ORDER_FINISH', 'FINISH', 'DONE'];
+
 export const OrderStatusModal: React.FC = () => {
-  const { isOrderStatusOpen, toggleOrderStatus, activeOrder } = useCartStore();
+  const { isOrderStatusOpen, toggleOrderStatus, activeOrder, setActiveOrder } = useCartStore();
   useBodyScrollLock(isOrderStatusOpen);
   const [currentStatus, setCurrentStatus] = useState<OrderStatus>('PENDING');
   const [isCopied, setIsCopied] = useState(false);
@@ -39,7 +42,7 @@ export const OrderStatusModal: React.FC = () => {
 
       // Realtime listener for active order status changes from Kasir App
       const channel = supabase
-        .channel(`order_status_sync_${activeOrder.orderId}`)
+        .channel(`order_status_modal_${activeOrder.orderId}`)
         .on(
           'postgres_changes',
           {
@@ -51,6 +54,16 @@ export const OrderStatusModal: React.FC = () => {
           (payload: any) => {
             const updated = payload.new;
             if (updated && updated.orderStatus) {
+              const rawStatus = updated.orderStatus.toUpperCase();
+
+              // If Kasir marks order as COMPLETED/FINISH → auto-clear and close modal
+              if (KASIR_COMPLETED_STATUSES.includes(rawStatus)) {
+                console.log(`[OrderStatusModal] Order completed by Kasir. Clearing activeOrder.`);
+                setActiveOrder(null);
+                toggleOrderStatus(false);
+                return;
+              }
+
               setCurrentStatus(updated.orderStatus);
               useCartStore.setState((state) => ({
                 activeOrder: state.activeOrder ? { ...state.activeOrder, orderStatus: updated.orderStatus } : null,
@@ -64,7 +77,7 @@ export const OrderStatusModal: React.FC = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [activeOrder]);
+  }, [activeOrder, setActiveOrder, toggleOrderStatus]);
 
 
   // Realtime Timestamp Tracker (Seconds elapsed since order creation)
@@ -154,6 +167,15 @@ export const OrderStatusModal: React.FC = () => {
 
         if (data && data.orderStatus) {
           const raw = data.orderStatus.toUpperCase();
+
+          // If Kasir completed this order, auto-clear and close
+          if (KASIR_COMPLETED_STATUSES.includes(raw)) {
+            console.log(`[OrderStatusModal Poller] Order completed. Clearing activeOrder.`);
+            setActiveOrder(null);
+            toggleOrderStatus(false);
+            return;
+          }
+
           let mappedStatus: OrderStatus = 'PENDING';
           
           if (raw === 'NEW_ORDER' || raw === 'PENDING') {
@@ -162,7 +184,7 @@ export const OrderStatusModal: React.FC = () => {
             mappedStatus = 'CONFIRMED';
           } else if (raw === 'IN_PROCESSED' || raw === 'KITCHEN_PROCESSING' || raw === 'PROCESSED' || raw === 'PROCESSING') {
             mappedStatus = 'KITCHEN_PROCESSING';
-          } else if (raw === 'ORDER_FINISH' || raw === 'READY' || raw === 'COMPLETED' || raw === 'FINISH') {
+          } else if (raw === 'ORDER_FINISH' || raw === 'READY') {
             mappedStatus = 'READY';
           }
 
