@@ -51,10 +51,13 @@ export const createSupabaseTransaction = async (order: OrderPayload) => {
     const itemRecords = order.items.map((item, idx) => {
       const addOnsParts: string[] = [];
       if (item.selectedAddOns && item.selectedAddOns.length > 0) {
-        addOnsParts.push(...item.selectedAddOns.map(a => `${a.optionName} (+Rp${a.price.toLocaleString('id-ID')})`));
+        const addonText = item.selectedAddOns
+          .map(a => a.price > 0 ? `${a.optionName} (+Rp ${a.price.toLocaleString('id-ID')})` : a.optionName)
+          .join(', ');
+        addOnsParts.push(addonText);
       }
       if (item.selectedVariants && item.selectedVariants.length > 0) {
-        addOnsParts.push(...item.selectedVariants.map(v => `${v.groupName}: ${v.optionName}`));
+        addOnsParts.push(...item.selectedVariants.map(v => `${v.optionName}`));
       }
       if (item.itemNotes) {
         addOnsParts.push(`Catatan: ${item.itemNotes}`);

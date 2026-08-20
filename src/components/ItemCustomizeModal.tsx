@@ -195,50 +195,62 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
             </div>
           ))}
 
-          {/* Add-On Groups (Checkbox style) */}
-          {item.addOnGroups?.map((group) => (
-            <div key={group.id} className="space-y-2.5 pt-2 border-t border-parchment-border">
-              <h4 className="font-bold text-sm text-charcoal">{group.name}</h4>
-              <div className="space-y-2">
-                {group.options.map((option) => {
-                  const isSelected = selectedAddOns.some(
-                    (a) => a.optionId === option.id
-                  );
-
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() =>
-                        handleAddOnToggle(option.id, option.name, option.price)
-                      }
-                      className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
-                        isSelected
-                          ? 'border-nyamleng-500 bg-nyamleng-50 text-nyamleng-600 shadow-xs'
-                          : 'border-parchment-border hover:bg-parchment-soft text-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                            isSelected
-                              ? 'border-nyamleng-500 bg-nyamleng-500'
-                              : 'border-gray-300'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-3 h-3 text-white" />}
-                        </div>
-                        <span>{option.name}</span>
-                      </div>
-                      <span className="text-[11px] font-bold text-nyamleng-600">
-                        +{formatRupiah(option.price)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+          {/* Add-On Groups (Kasir App Match) */}
+          {(!item.addOnGroups || item.addOnGroups.length === 0 || item.addOnGroups.every(g => g.options.length === 0)) ? (
+            <div className="text-center py-6 bg-parchment-soft rounded-2xl border border-parchment-border p-4 text-xs text-gray-500">
+              <p className="font-bold text-charcoal">Tidak Ada Add-On Khusus</p>
+              <p className="mt-0.5">Menu ini dapat langsung dimasukkan ke keranjang.</p>
             </div>
-          ))}
+          ) : (
+            item.addOnGroups?.map((group) => (
+              <div key={group.id} className="space-y-2.5 pt-2 border-t border-parchment-border">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm text-charcoal">{group.name}</h4>
+                  <span className="text-[11px] font-semibold text-nyamleng-600">
+                    {selectedAddOns.length} dipilih
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {group.options.map((option) => {
+                    const isSelected = selectedAddOns.some(
+                      (a) => a.optionId === option.id
+                    );
+
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() =>
+                          handleAddOnToggle(option.id, option.name, option.price)
+                        }
+                        className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
+                          isSelected
+                            ? 'border-nyamleng-500 bg-nyamleng-50 text-nyamleng-600 shadow-xs'
+                            : 'border-parchment-border hover:bg-parchment-soft text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                              isSelected
+                                ? 'border-nyamleng-500 bg-nyamleng-500'
+                                : 'border-gray-300'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <span>{option.name}</span>
+                        </div>
+                        <span className="text-[11px] font-bold text-nyamleng-600">
+                          {option.price > 0 ? `+ ${formatRupiah(option.price)}` : 'Gratis'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
 
           {/* Special Kitchen Notes */}
           <div className="space-y-2 pt-2 border-t border-parchment-border">

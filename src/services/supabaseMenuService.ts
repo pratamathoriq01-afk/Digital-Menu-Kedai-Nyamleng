@@ -158,36 +158,6 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
         },
       ] : [];
 
-      // Smart Default Variant Groups based on Category
-      const isDrink = categorySlug === 'minuman';
-      const isFood = ['ayam-nyamleng', 'ikan-nyamleng', 'alacarte', 'makanan', 'paket-hemat'].includes(categorySlug);
-
-      const variantGroups: VariantGroup[] = [];
-
-      if (isFood) {
-        variantGroups.push({
-          id: 'var-pedas',
-          name: 'Level Kepedasan Sambal',
-          required: true,
-          options: [
-            { id: 'p1', name: 'Level 1: Sedang', priceModifier: 0 },
-            { id: 'p2', name: 'Level 2: Pedas Nyamleng (Favorit)', priceModifier: 0 },
-            { id: 'p3', name: 'Level 3: Ekstra Pedas Gila', priceModifier: 2000 },
-          ],
-        });
-      } else if (isDrink) {
-        variantGroups.push({
-          id: 'var-suhu',
-          name: 'Suhu Minuman',
-          required: true,
-          options: [
-            { id: 'd1', name: 'Es Dingin Segar', priceModifier: 0 },
-            { id: 'd2', name: 'Hangat / Panas', priceModifier: 0 },
-            { id: 'd3', name: 'Suhu Normal (Tanpa Es)', priceModifier: 0 },
-          ],
-        });
-      }
-
       return {
         id: item.id,
         posSku: item.id ? item.id.slice(-6).toUpperCase() : 'SKU-001',
@@ -199,7 +169,7 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
         tags: ['Terlaris'],
         isAvailable: item.isActive,
         preparationTimeMinutes: 7,
-        variantGroups,
+        variantGroups: [],
         addOnGroups,
         _rawCategory: item.category,
       } as MenuItem & { _rawCategory: string };
