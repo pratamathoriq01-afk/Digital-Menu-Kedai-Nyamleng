@@ -136,27 +136,133 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
 
     const mappedItems: MenuItem[] = data.map((item: any) => {
       const categorySlug = mapCategoryToSlug(item.category || '');
+      const isDrink = categorySlug === 'minuman' || (item.category || '').toLowerCase().includes('minuman');
 
-      // Match AddOns for this menu item
-      const matchingAddOns = allAddOns.filter((addon) => {
-        if (!addon.isActive) return false;
-        if (!addon.category || addon.category === 'Semua') return true;
-        return addon.category === item.category;
+      // Smart Section Categorization mirroring Kasir App (AddOnPickerModal.tsx)
+      const activeAddOns = allAddOns.filter((a) => a.isActive);
+
+      // 1. Ice / Suhu Add-Ons
+      const iceAddOns = activeAddOns.filter((a) => {
+        const cat = (a.category || '').toLowerCase();
+        const name = (a.name || '').toLowerCase();
+        return (
+          cat.includes('es') ||
+          cat.includes('suhu') ||
+          cat.includes('ice') ||
+          name.includes('es') ||
+          name.includes('ice') ||
+          name.includes('hangat') ||
+          name.includes('warm') ||
+          name.includes('suhu')
+        );
       });
 
-      // Build Add-On group
-      const addOnGroups: AddOnGroup[] = matchingAddOns.length > 0 ? [
-        {
-          id: 'addon-group-1',
-          name: 'Pilihan Tambahan / Topping',
-          maxSelect: matchingAddOns.length,
-          options: matchingAddOns.map((addon) => ({
-            id: addon.id,
-            name: addon.name,
-            price: Number(addon.price || 0),
-          } as AddOnOption)),
-        },
-      ] : [];
+      // 2. Sugar / Manis Add-Ons
+      const sugarAddOns = activeAddOns.filter((a) => {
+        if (iceAddOns.includes(a)) return false;
+        const cat = (a.category || '').toLowerCase();
+        const name = (a.name || '').toLowerCase();
+        return (
+          cat.includes('gula') ||
+          cat.includes('manis') ||
+          name.includes('gula') ||
+          name.includes('sugar') ||
+          name.includes('manis')
+        );
+      });
+
+      // 3. Sambal Add-Ons
+      const sambalAddOns = activeAddOns.filter((a) => {
+        if (iceAddOns.includes(a) || sugarAddOns.includes(a)) return false;
+        const cat = (a.category || '').toLowerCase();
+        const name = (a.name || '').toLowerCase();
+        return (
+          cat.includes('sambal') ||
+          name.includes('sambal') ||
+          name.includes('bawang') ||
+          name.includes('hijau') ||
+          name.includes('matah') ||
+          name.includes('terasi')
+        );
+      });
+
+      // 4. Pedas Add-Ons
+      const pedasAddOns = activeAddOns.filter((a) => {
+        if (iceAddOns.includes(a) || sugarAddOns.includes(a) || sambalAddOns.includes(a)) return false;
+        const cat = (a.category || '').toLowerCase();
+        const name = (a.name || '').toLowerCase();
+        return (
+          cat.includes('pedas') ||
+          name.includes('pedas') ||
+          name.includes('level') ||
+          name.includes('sedang') ||
+          name.includes('super')
+        );
+      });
+
+      // 5. Topping / General Food Add-Ons (Catches all remaining active items so nothing is lost!)
+      const toppingAddOns = activeAddOns.filter(
+        (a) =>
+          !iceAddOns.includes(a) &&
+          !sugarAddOns.includes(a) &&
+          !sambalAddOns.includes(a) &&
+          !pedasAddOns.includes(a)
+      );
+
+      const addOnGroups: AddOnGroup[] = [];
+
+      if (isDrink) {
+        if (iceAddOns.length > 0) {
+          addOnGroups.push({
+            id: 'group-ice',
+            name: '🧊 Pilihan Level Es / Suhu',
+            isSingleSelect: true,
+            options: iceAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+          });
+        }
+        if (sugarAddOns.length > 0) {
+          addOnGroups.push({
+            id: 'group-sugar',
+            name: '🍬 Pilihan Level Gula',
+            isSingleSelect: true,
+            options: sugarAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+          });
+        }
+        if (toppingAddOns.length > 0) {
+          addOnGroups.push({
+            id: 'group-topping-drink',
+            name: '🍹 Topping & Ekstra Minuman',
+            isSingleSelect: false,
+            options: toppingAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+          });
+        }
+      } else {
+        // Food item
+        if (pedasAddOns.length > 0) {
+          addOnGroups.push({
+            id: 'group-pedas',
+            name: '🔥 Level Kepedasan Sambal',
+            isSingleSelect: true,
+            options: pedasAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+          });
+        }
+        if (sambalAddOns.length > 0) {
+          addOnGroups.push({
+            id: 'group-sambal',
+            name: '🌶️ Pilihan Jenis Sambal',
+            isSingleSelect: true,
+            options: sambalAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+          });
+        }
+        if (toppingAddOns.length > 0) {
+          addOnGroups.push({
+            id: 'group-topping-food',
+            name: '🍳 Ekstra Topping & Lauk Tambahan',
+            isSingleSelect: false,
+            options: toppingAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+          });
+        }
+      }
 
       return {
         id: item.id,

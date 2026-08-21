@@ -67,6 +67,7 @@ export interface AddOnOption {
 export interface AddOnGroup {
   id: string;
   name: string;
+  isSingleSelect?: boolean;
   maxSelect?: number;
   options: AddOnOption[];
 }

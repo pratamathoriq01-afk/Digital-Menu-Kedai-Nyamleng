@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Minus, Check, MessageSquare, Clock } from 'lucide-react';
-import { MenuItem, SelectedAddOn, SelectedVariant } from '@/types/pos';
+import { MenuItem, SelectedAddOn, SelectedVariant, AddOnOption } from '@/types/pos';
 import { useCartStore } from '@/store/useCartStore';
 import { useBodyScrollLock } from '@/lib/scrollLock';
 
@@ -61,9 +61,24 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
     });
   };
 
-  const handleAddOnToggle = (optionId: string, optionName: string, price: number) => {
+  const handleAddOnToggle = (
+    optionId: string, 
+    optionName: string, 
+    price: number,
+    groupOptions?: AddOnOption[],
+    isSingleSelect?: boolean
+  ) => {
     setSelectedAddOns((prev) => {
       const exists = prev.some((a) => a.optionId === optionId);
+      if (isSingleSelect && groupOptions) {
+        const groupOptionIds = groupOptions.map((g) => g.id);
+        const filtered = prev.filter((a) => !groupOptionIds.includes(a.optionId));
+        if (exists) {
+          return filtered; // deselect if clicked again
+        }
+        return [...filtered, { optionId, optionName, price }];
+      }
+
       if (exists) {
         return prev.filter((a) => a.optionId !== optionId);
       } else {
@@ -206,11 +221,11 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
               <div key={group.id} className="space-y-2.5 pt-2 border-t border-parchment-border">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-sm text-charcoal">{group.name}</h4>
-                  <span className="text-[11px] font-semibold text-nyamleng-600">
-                    {selectedAddOns.length} dipilih
+                  <span className="text-[10px] text-nyamleng-600 font-bold bg-nyamleng-50 px-2 py-0.5 rounded-md border border-nyamleng-200">
+                    {group.isSingleSelect ? 'Pilih 1 (Opsional)' : 'Bisa Pilih Banyak'}
                   </span>
                 </div>
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {group.options.map((option) => {
                     const isSelected = selectedAddOns.some(
                       (a) => a.optionId === option.id
@@ -221,7 +236,13 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
                         key={option.id}
                         type="button"
                         onClick={() =>
-                          handleAddOnToggle(option.id, option.name, option.price)
+                          handleAddOnToggle(
+                            option.id, 
+                            option.name, 
+                            option.price,
+                            group.options,
+                            group.isSingleSelect
+                          )
                         }
                         className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
                           isSelected
@@ -231,10 +252,12 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
                       >
                         <div className="flex items-center gap-2">
                           <div
-                            className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                            className={`w-4 h-4 border flex items-center justify-center transition-all ${
+                              group.isSingleSelect ? 'rounded-full' : 'rounded-md'
+                            } ${
                               isSelected
                                 ? 'border-nyamleng-500 bg-nyamleng-500'
-                                : 'border-gray-300'
+                                : 'border-gray-300 bg-white'
                             }`}
                           >
                             {isSelected && <Check className="w-3 h-3 text-white" />}
