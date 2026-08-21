@@ -138,6 +138,28 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
       const categorySlug = mapCategoryToSlug(item.category || '');
       const isDrink = categorySlug === 'minuman' || (item.category || '').toLowerCase().includes('minuman');
 
+      // Helper to identify food-specific add-ons
+      const isFoodAddOn = (a: any) => {
+        const cat = (a.category || '').toLowerCase();
+        const name = (a.name || '').toLowerCase();
+        return (
+          cat.includes('lauk') ||
+          cat.includes('makanan') ||
+          cat.includes('sambal') ||
+          cat.includes('pedas') ||
+          name.includes('tahu') ||
+          name.includes('tempe') ||
+          name.includes('terong') ||
+          name.includes('nasi') ||
+          name.includes('telur') ||
+          name.includes('sambal') ||
+          name.includes('pedas') ||
+          name.includes('ayam') ||
+          name.includes('bebek') ||
+          name.includes('ikan')
+        );
+      };
+
       // Smart Section Categorization mirroring Kasir App (AddOnPickerModal.tsx)
       const activeAddOns = allAddOns.filter((a) => a.isActive);
 
@@ -200,13 +222,22 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
         );
       });
 
-      // 5. Topping / General Food Add-Ons (Catches all remaining active items so nothing is lost!)
-      const toppingAddOns = activeAddOns.filter(
+      // 5. Topping / General Food Add-Ons
+      const foodToppingAddOns = activeAddOns.filter(
         (a) =>
           !iceAddOns.includes(a) &&
           !sugarAddOns.includes(a) &&
           !sambalAddOns.includes(a) &&
-          !pedasAddOns.includes(a)
+          !pedasAddOns.includes(a) &&
+          isFoodAddOn(a)
+      );
+
+      // 6. Drink Extra Toppings
+      const drinkToppingAddOns = activeAddOns.filter(
+        (a) =>
+          !iceAddOns.includes(a) &&
+          !sugarAddOns.includes(a) &&
+          !isFoodAddOn(a)
       );
 
       const addOnGroups: AddOnGroup[] = [];
@@ -228,12 +259,12 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
             options: sugarAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
           });
         }
-        if (toppingAddOns.length > 0) {
+        if (drinkToppingAddOns.length > 0) {
           addOnGroups.push({
             id: 'group-topping-drink',
             name: '🍹 Topping & Ekstra Minuman',
             isSingleSelect: false,
-            options: toppingAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+            options: drinkToppingAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
           });
         }
       } else {
@@ -254,12 +285,12 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
             options: pedasAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
           });
         }
-        if (toppingAddOns.length > 0) {
+        if (foodToppingAddOns.length > 0) {
           addOnGroups.push({
             id: 'group-topping-food',
             name: '🍳 Ekstra Topping & Lauk Tambahan',
             isSingleSelect: false,
-            options: toppingAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+            options: foodToppingAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
           });
         }
       }
