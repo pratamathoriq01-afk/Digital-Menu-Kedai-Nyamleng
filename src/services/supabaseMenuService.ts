@@ -238,20 +238,20 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
         }
       } else {
         // Food item
-        if (pedasAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-pedas',
-            name: '🔥 Level Kepedasan Sambal',
-            isSingleSelect: true,
-            options: pedasAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
         if (sambalAddOns.length > 0) {
           addOnGroups.push({
             id: 'group-sambal',
             name: '🌶️ Pilihan Jenis Sambal',
             isSingleSelect: true,
             options: sambalAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+          });
+        }
+        if (pedasAddOns.length > 0) {
+          addOnGroups.push({
+            id: 'group-pedas',
+            name: '🔥 Level Kepedasan Sambal',
+            isSingleSelect: true,
+            options: pedasAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
           });
         }
         if (toppingAddOns.length > 0) {
