@@ -36,7 +36,7 @@ const SLUG_LABEL_MAP: Record<string, string> = {
   'snack': '🍟 Cemilan & Snack',
   'paket-hemat': '📦 Paket Hemat',
   'dessert': '🍰 Dessert',
-  'makanan': '🍽️ Makanan',
+  'makanan': '🍽️ Tahu Tempe Nyamleng',
   'promo': '✨ Promo',
 };
 
