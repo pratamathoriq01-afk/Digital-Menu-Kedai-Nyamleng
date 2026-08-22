@@ -538,12 +538,15 @@ export const OrderStatusModal: React.FC = () => {
         </div>
 
         {/* Clean Footer Action */}
-        <div className="p-4 bg-white border-t border-parchment-border flex items-center justify-end pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="p-4 bg-white border-t border-parchment-border flex flex-col items-center justify-end pb-[calc(1rem+env(safe-area-inset-bottom))] gap-2">
           <button
-            onClick={() => toggleOrderStatus(false)}
-            className="w-full py-3 px-6 bg-nyamleng-600 hover:bg-nyamleng-700 active:scale-98 text-white font-extrabold text-sm rounded-2xl shadow-md transition-all cursor-pointer"
+            onClick={() => {
+              setActiveOrder(null);
+              toggleOrderStatus(false);
+            }}
+            className="w-full py-3 px-6 bg-nyamleng-600 hover:bg-nyamleng-700 active:scale-98 text-white font-extrabold text-sm rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
           >
-            Tutup Tracking &amp; Kembali ke Menu
+            <span>{currentStatus === 'READY' || currentStatus === 'COMPLETED' ? '✅ Selesai & Simpan ke Riwayat Pesanan' : 'Tutup Tracking & Simpan ke Riwayat'}</span>
           </button>
         </div>
       </div>

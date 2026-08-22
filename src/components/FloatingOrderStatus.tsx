@@ -42,6 +42,17 @@ export const FloatingOrderStatus: React.FC = () => {
 
     const currentOrderId = activeOrder.orderId;
 
+    // Check if order is > 6 hours old (stale order guard)
+    if (activeOrder.createdAt) {
+      const createdTime = new Date(activeOrder.createdAt).getTime();
+      const now = Date.now();
+      if (now - createdTime > 6 * 60 * 60 * 1000) {
+        console.log(`[FloatingOrderStatus] Order ${currentOrderId} is older than 6 hours. Auto-clearing activeOrder.`);
+        setActiveOrder(null);
+        return;
+      }
+    }
+
     const handleStatusUpdate = (rawStatus: string) => {
       const mappedStatus = mapKasirStatus(rawStatus);
 
@@ -72,6 +83,10 @@ export const FloatingOrderStatus: React.FC = () => {
 
         if (data?.orderStatus) {
           handleStatusUpdate(data.orderStatus);
+        } else if (!data) {
+          // Order not found in DB (e.g. deleted or stale test order) — clear activeOrder so floating pill disappears
+          console.log(`[FloatingOrderStatus] Order ${currentOrderId} not found in DB. Auto-clearing activeOrder.`);
+          setActiveOrder(null);
         }
       } catch (e) {
         console.warn('[FloatingOrderStatus] Immediate status check failed:', e);
