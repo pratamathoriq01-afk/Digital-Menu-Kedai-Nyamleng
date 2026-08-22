@@ -228,11 +228,11 @@ export default function Home() {
       'paket-hemat': { title: '📦 Paket Hemat & Promo', order: 1 },
       'ayam-nyamleng': { title: '🍗 Menu Ayam Nyamleng', order: 2 },
       'ikan-nyamleng': { title: '🐟 Menu Ikan & Bebek Nyamleng', order: 3 },
-      'alacarte': { title: '🍱 Ala Carte & Side Dish', order: 4 },
-      'minuman': { title: '🥤 Minuman Segar', order: 5 },
+      'makanan': { title: '🍽️ Makanan Khas Kedai', order: 4 },
+      'alacarte': { title: '🍱 Ala Carte & Side Dish', order: 5 },
       'snack': { title: '🍟 Cemilan & Snack', order: 6 },
       'dessert': { title: '🍰 Dessert & Pencuci Mulut', order: 7 },
-      'makanan': { title: '🍽️ Makanan Khas Kedai', order: 8 },
+      'minuman': { title: '🥤 Minuman Segar', order: 99 },
     };
 
     const map = new Map<string, MenuItem[]>();

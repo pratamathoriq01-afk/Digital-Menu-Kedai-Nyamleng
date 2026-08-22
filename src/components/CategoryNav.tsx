@@ -43,6 +43,18 @@ const SLUG_LABEL_MAP: Record<string, string> = {
 export const CategoryNav: React.FC = () => {
   const { menuItems, selectedCategory, setSelectedCategory } = useCartStore();
 
+  // Predefined category ordering priority
+  const CATEGORY_ORDER = [
+    'paket-hemat',
+    'ayam-nyamleng',
+    'ikan-nyamleng',
+    'makanan',
+    'alacarte',
+    'snack',
+    'dessert',
+    'minuman',
+  ];
+
   // Derive categories dynamically from actual menu items fetched from Supabase
   const dynamicCategories = useMemo(() => {
     const seen = new Set<string>();
@@ -59,6 +71,14 @@ export const CategoryNav: React.FC = () => {
         });
       }
     }
+
+    cats.sort((a, b) => {
+      const idxA = CATEGORY_ORDER.indexOf(a.id);
+      const idxB = CATEGORY_ORDER.indexOf(b.id);
+      const orderA = idxA !== -1 ? idxA : 50;
+      const orderB = idxB !== -1 ? idxB : 50;
+      return orderA - orderB;
+    });
 
     return cats;
   }, [menuItems]);
