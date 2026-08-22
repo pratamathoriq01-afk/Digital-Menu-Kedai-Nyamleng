@@ -209,7 +209,6 @@ export default function Home() {
         ? item.categoryId === 'camilan' || item.categoryId === 'snack'
         : item.categoryId === selectedCategory;
 
-
     const matchesSearch = searchQuery
       ? item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -218,6 +217,48 @@ export default function Home() {
 
     return matchesCategory && matchesSearch;
   });
+
+  // Dynamic Category Section Grouping (when viewing "Semua Menu" without active search query)
+  const groupedSections = React.useMemo(() => {
+    if (selectedCategory !== 'all' || searchQuery) {
+      return null;
+    }
+
+    const CATEGORY_META: Record<string, { title: string; order: number }> = {
+      'paket-hemat': { title: '📦 Paket Hemat & Promo', order: 1 },
+      'ayam-nyamleng': { title: '🍗 Menu Ayam Nyamleng', order: 2 },
+      'ikan-nyamleng': { title: '🐟 Menu Ikan & Bebek Nyamleng', order: 3 },
+      'alacarte': { title: '🍱 Ala Carte & Side Dish', order: 4 },
+      'minuman': { title: '🥤 Minuman Segar', order: 5 },
+      'snack': { title: '🍟 Cemilan & Snack', order: 6 },
+      'dessert': { title: '🍰 Dessert & Pencuci Mulut', order: 7 },
+      'makanan': { title: '🍽️ Makanan Khas Kedai', order: 8 },
+    };
+
+    const map = new Map<string, MenuItem[]>();
+
+    for (const item of filteredMenuItems) {
+      const slug = item.categoryId || 'makanan';
+      if (!map.has(slug)) map.set(slug, []);
+      map.get(slug)!.push(item);
+    }
+
+    const sections = Array.from(map.entries()).map(([slug, items]) => {
+      const meta = CATEGORY_META[slug] || {
+        title: `🍽️ ${slug.replace(/-/g, ' ').toUpperCase()}`,
+        order: 99,
+      };
+      return {
+        slug,
+        title: meta.title,
+        order: meta.order,
+        items,
+      };
+    });
+
+    sections.sort((a, b) => a.order - b.order);
+    return sections;
+  }, [filteredMenuItems, selectedCategory, searchQuery]);
 
   const handleOpenCustomize = (item: MenuItem) => {
     setSelectedMenuItem(item);
@@ -276,8 +317,36 @@ export default function Home() {
                     : 'Belum ada menu aktif di database. Daftar menu tersinkronisasi realtime dengan Kasir App dan akan otomatis muncul begitu ditambahkan!'}
                 </p>
               </div>
+            ) : groupedSections ? (
+              /* Categorized Sections View (When "Semua Menu" is selected) */
+              <div className="space-y-6">
+                {groupedSections.map((section) => (
+                  <div key={section.slug} id={`category-section-${section.slug}`} className="space-y-3 pt-1">
+                    {/* Category Sub-Header Banner */}
+                    <div className="bg-gradient-to-r from-nyamleng-50 to-amber-50 p-3 rounded-2xl border border-nyamleng-200/80 flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-sm sm:text-base text-charcoal">{section.title}</span>
+                      </div>
+                      <span className="text-[11px] font-bold text-nyamleng-700 bg-white px-2.5 py-0.5 rounded-full border border-nyamleng-200 shadow-2xs">
+                        {section.items.length} Menu
+                      </span>
+                    </div>
+
+                    {/* Menu Grid per Category */}
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-2 sm:gap-3.5">
+                      {section.items.map((item) => (
+                        <MenuItemCard
+                          key={item.id}
+                          item={item}
+                          onOpenCustomize={handleOpenCustomize}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
-              /* Menu Grid: 2 Columns on Mobile, 3 Columns on Desktop */
+              /* Single Category View / Search View */
               <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-2 sm:gap-3.5">
                 {filteredMenuItems.map((item) => (
                   <MenuItemCard
