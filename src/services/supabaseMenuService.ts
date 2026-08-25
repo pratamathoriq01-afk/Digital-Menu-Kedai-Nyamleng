@@ -30,6 +30,37 @@ export const mapCategoryToSlug = (rawCategory: string): string => {
   return 'makanan';
 };
 
+/**
+ * Dynamic Category Sorting Rank matching Kasir App (data-service.ts)
+ */
+export function getCategorySortRank(categoryName: string): number {
+  const cat = (categoryName || '').toLowerCase().trim();
+  if (cat.includes('paket') || cat.includes('bundling') || cat.includes('komplit') || cat.includes('promo')) return 1;
+  if (cat.includes('ayam')) return 2;
+  if (cat.includes('ikan') || cat.includes('seafood') || cat.includes('tongkol') || cat.includes('lele') || cat.includes('bebek')) return 3;
+  if (cat.includes('tahu') || cat.includes('tempe')) return 4;
+  if (cat.includes('alacarte') || cat.includes('ala carte') || cat.includes('makanan')) return 5;
+  if (cat.includes('snack') || cat.includes('cemilan') || cat.includes('gorengan') || cat.includes('dessert') || cat.includes('sambal')) return 6;
+  if (cat.includes('minuman') || cat.includes('drink') || cat.includes('beverage') || cat.includes('es ') || cat.includes('kopi')) return 99;
+  return 10;
+}
+
+/**
+ * Dynamic Category Icon assignment
+ */
+export function getCategoryIcon(categoryName: string): string {
+  const cat = (categoryName || '').toLowerCase().trim();
+  if (cat.includes('paket') || cat.includes('promo') || cat.includes('hemat')) return '📦';
+  if (cat.includes('ayam')) return '🍗';
+  if (cat.includes('ikan') || cat.includes('seafood') || cat.includes('tongkol') || cat.includes('lele') || cat.includes('bebek')) return '🐟';
+  if (cat.includes('tahu') || cat.includes('tempe')) return '🍽️';
+  if (cat.includes('alacarte') || cat.includes('ala carte')) return '🍱';
+  if (cat.includes('snack') || cat.includes('cemilan') || cat.includes('gorengan')) return '🍟';
+  if (cat.includes('dessert')) return '🍰';
+  if (cat.includes('minuman') || cat.includes('drink') || cat.includes('beverage') || cat.includes('es') || cat.includes('kopi')) return '🥤';
+  return '🍽️';
+}
+
 // Default fallback StoreSettings
 export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   id: 'default',
@@ -351,6 +382,7 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
         description: item.description || `Menu pilihan khas Kedai Nyamleng - ${item.name}.`,
         price: Number(item.price),
         categoryId: categorySlug,
+        categoryName: item.category || 'Menu Utama',
         image: item.imageUrl || getFallbackImage(categorySlug),
         tags: ['Terlaris'],
         isAvailable: item.isActive,

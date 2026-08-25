@@ -1,6 +1,6 @@
 'use client';
 
-import { fetchSupabaseVouchers, fetchSupabaseStoreSettings } from '@/services/supabaseMenuService';
+import { fetchSupabaseVouchers, fetchSupabaseStoreSettings, getCategorySortRank, getCategoryIcon } from '@/services/supabaseMenuService';
 import React, { useState, useEffect } from 'react';
 
 import { 
@@ -224,39 +224,34 @@ export default function Home() {
       return null;
     }
 
-    const CATEGORY_META: Record<string, { title: string; order: number }> = {
-      'paket-hemat': { title: '📦 Paket Hemat & Promo', order: 1 },
-      'ayam-nyamleng': { title: '🍗 Menu Ayam Nyamleng', order: 2 },
-      'ikan-nyamleng': { title: '🐟 Menu Ikan & Bebek Nyamleng', order: 3 },
-      'makanan': { title: '🍽️ Tahu Tempe Nyamleng', order: 4 },
-      'alacarte': { title: '🍱 Ala Carte & Side Dish', order: 5 },
-      'snack': { title: '🍟 Cemilan & Snack', order: 6 },
-      'dessert': { title: '🍰 Dessert & Pencuci Mulut', order: 7 },
-      'minuman': { title: '🥤 Minuman Segar', order: 99 },
-    };
-
-    const map = new Map<string, MenuItem[]>();
+    const map = new Map<string, { categoryName: string; slug: string; items: MenuItem[] }>();
 
     for (const item of filteredMenuItems) {
-      const slug = item.categoryId || 'makanan';
-      if (!map.has(slug)) map.set(slug, []);
-      map.get(slug)!.push(item);
+      const categoryName = item.categoryName || item.categoryId || 'Menu Utama';
+      const slug = item.categoryId || 'menu-utama';
+      if (!map.has(categoryName)) {
+        map.set(categoryName, { categoryName, slug, items: [] });
+      }
+      map.get(categoryName)!.items.push(item);
     }
 
-    const sections = Array.from(map.entries()).map(([slug, items]) => {
-      const meta = CATEGORY_META[slug] || {
-        title: `🍽️ ${slug.replace(/-/g, ' ').toUpperCase()}`,
-        order: 99,
-      };
+    const sections = Array.from(map.values()).map(({ categoryName, slug, items }) => {
+      const rank = getCategorySortRank(categoryName);
+      const icon = getCategoryIcon(categoryName);
+
       return {
         slug,
-        title: meta.title,
-        order: meta.order,
+        title: `${icon} ${categoryName}`,
+        order: rank,
         items,
       };
     });
 
-    sections.sort((a, b) => a.order - b.order);
+    sections.sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return a.title.localeCompare(b.title);
+    });
+
     return sections;
   }, [filteredMenuItems, selectedCategory, searchQuery]);
 

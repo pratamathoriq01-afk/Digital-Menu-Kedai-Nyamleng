@@ -87,6 +87,7 @@ export interface MenuItem {
   description: string;
   price: number;
   categoryId: string;
+  categoryName?: string;
   image: string;
   tags?: ('Terlaris' | 'Pedas' | 'Rekomendasi' | 'Baru' | 'Hemat')[];
   isAvailable: boolean;

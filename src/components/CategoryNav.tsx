@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
+import { getCategorySortRank, getCategoryIcon } from '@/services/supabaseMenuService';
 
 // Icon mapping for each known category slug from Kasir App
 const SLUG_ICON_MAP: Record<string, React.ReactNode> = {
@@ -27,57 +28,36 @@ const SLUG_ICON_MAP: Record<string, React.ReactNode> = {
   'promo': <Sparkles className="w-4 h-4" />,
 };
 
-// Display name overrides per slug (matches Kasir App category names)
-const SLUG_LABEL_MAP: Record<string, string> = {
-  'ayam-nyamleng': '🍗 Ayam Nyamleng',
-  'ikan-nyamleng': '🐟 Ikan Nyamleng',
-  'minuman': '🥤 Minuman',
-  'alacarte': '🍱 Ala Carte',
-  'snack': '🍟 Cemilan & Snack',
-  'paket-hemat': '📦 Paket Hemat',
-  'dessert': '🍰 Dessert',
-  'makanan': '🍽️ Tahu Tempe Nyamleng',
-  'promo': '✨ Promo',
-};
-
 export const CategoryNav: React.FC = () => {
   const { menuItems, selectedCategory, setSelectedCategory } = useCartStore();
 
-  // Predefined category ordering priority
-  const CATEGORY_ORDER = [
-    'paket-hemat',
-    'ayam-nyamleng',
-    'ikan-nyamleng',
-    'makanan',
-    'alacarte',
-    'snack',
-    'dessert',
-    'minuman',
-  ];
-
-  // Derive categories dynamically from actual menu items fetched from Supabase
+  // Derive categories dynamically from actual menu items fetched from Supabase (matching Kasir App sorting)
   const dynamicCategories = useMemo(() => {
-    const seen = new Set<string>();
-    const cats: { id: string; label: string; icon: React.ReactNode }[] = [];
+    const map = new Map<string, { id: string; rawName: string; label: string; rank: number; icon: React.ReactNode }>();
 
     for (const item of menuItems) {
       const slug = item.categoryId;
-      if (!seen.has(slug)) {
-        seen.add(slug);
-        cats.push({
+      const rawName = item.categoryName || slug;
+
+      if (!map.has(slug)) {
+        const emoji = getCategoryIcon(rawName);
+        const rank = getCategorySortRank(rawName);
+        const iconComponent = SLUG_ICON_MAP[slug] || <UtensilsCrossed className="w-4 h-4" />;
+
+        map.set(slug, {
           id: slug,
-          label: SLUG_LABEL_MAP[slug] || slug,
-          icon: SLUG_ICON_MAP[slug] || <UtensilsCrossed className="w-4 h-4" />,
+          rawName,
+          label: `${emoji} ${rawName}`,
+          rank,
+          icon: iconComponent,
         });
       }
     }
 
+    const cats = Array.from(map.values());
     cats.sort((a, b) => {
-      const idxA = CATEGORY_ORDER.indexOf(a.id);
-      const idxB = CATEGORY_ORDER.indexOf(b.id);
-      const orderA = idxA !== -1 ? idxA : 50;
-      const orderB = idxB !== -1 ? idxB : 50;
-      return orderA - orderB;
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      return a.rawName.localeCompare(b.rawName);
     });
 
     return cats;
