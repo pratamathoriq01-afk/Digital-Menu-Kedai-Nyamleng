@@ -20,7 +20,7 @@ import {
   getRecentCustomerAccounts
 } from '@/services/authService';
 import { supabase } from '@/lib/supabaseClient';
-import { useBodyScrollLock } from '@/lib/scrollLock';
+import { ResponsiveModal } from '@/components/ui/responsive-modal';
 
 interface GoogleLoginModalProps {
   isOpen: boolean;
@@ -33,7 +33,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   isOpen,
   onLoginSuccess,
 }) => {
-  useBodyScrollLock(isOpen);
   const [stepMode, setStepMode] = useState<StepMode>('FIGMA_MAIN');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,8 +49,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
       setDeviceAccounts(recents);
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   // Execute SSO Account Login (Google / Apple / Email)
   const handleSelectAccountAndLogin = async (selectedEmail: string, selectedName?: string, provider: 'GOOGLE' | 'APPLE' = 'GOOGLE') => {
@@ -166,8 +163,13 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in pb-[env(safe-area-inset-bottom)]">
-      
+    <ResponsiveModal
+      open={isOpen}
+      onOpenChange={(open) => !open}
+      showCloseButton={false}
+      desktopClassName="sm:max-w-md p-0 bg-transparent border-none shadow-none"
+      mobileClassName="max-h-[92vh] p-0 bg-transparent border-none shadow-none"
+    >
       {/* MODE 1: MAIN SSO SIGN-IN UI (Google & Apple ID Only) */}
       {stepMode === 'FIGMA_MAIN' && (
         <div className="w-full max-w-sm sm:max-w-md bg-[#18181b] text-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/10 space-y-6 animate-slide-up relative overflow-hidden">
@@ -456,6 +458,6 @@ export const GoogleLoginModal: React.FC<GoogleLoginModalProps> = ({
         </div>
       )}
 
-    </div>
+    </ResponsiveModal>
   );
 };

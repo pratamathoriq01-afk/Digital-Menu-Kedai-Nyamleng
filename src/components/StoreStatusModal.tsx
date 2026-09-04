@@ -15,7 +15,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
-import { useBodyScrollLock } from '@/lib/scrollLock';
+import { ResponsiveModal } from '@/components/ui/responsive-modal';
 
 interface StoreStatusModalProps {
   isOpen: boolean;
@@ -26,7 +26,6 @@ export const StoreStatusModal: React.FC<StoreStatusModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  useBodyScrollLock(isOpen);
   const { storeSettings, updateStoreSettings, isStoreOpen } = useCartStore();
 
   const [isOpenManual, setIsOpenManual] = useState<boolean>(true);
@@ -46,8 +45,6 @@ export const StoreStatusModal: React.FC<StoreStatusModalProps> = ({
       setClosedReason(storeSettings.closedReason || 'Kedai sedang istirahat / tutup sementara.');
     }
   }, [storeSettings, isOpen]);
-
-  if (!isOpen) return null;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,13 +75,16 @@ export const StoreStatusModal: React.FC<StoreStatusModalProps> = ({
   const currentlyOpen = isStoreOpen();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
-      <div 
-        className="bg-white text-slate-900 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-slate-200 animate-slide-up flex flex-col max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResponsiveModal
+      open={isOpen}
+      onOpenChange={(open) => !open && onClose()}
+      showCloseButton={false}
+      desktopClassName="sm:max-w-lg p-0 overflow-hidden rounded-3xl border-none shadow-2xl bg-white"
+      mobileClassName="max-h-[90vh] p-0 overflow-hidden rounded-t-3xl border-none shadow-2xl bg-white"
+    >
+      <div className="flex flex-col h-full overflow-hidden bg-white text-slate-900">
         {/* Modal Header */}
-        <div className="bg-slate-950 text-white p-5 flex items-center justify-between border-b border-slate-800">
+        <div className="bg-slate-950 text-white p-5 flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
               <Store className="w-5 h-5" />
@@ -246,6 +246,6 @@ export const StoreStatusModal: React.FC<StoreStatusModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </ResponsiveModal>
   );
 };

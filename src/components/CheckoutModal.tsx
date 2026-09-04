@@ -26,10 +26,10 @@ import { useCartStore } from '@/store/useCartStore';
 import { DeliveryCourier, OFFICIAL_STORE_WA, OrderPayload } from '@/types/pos';
 import { PromoVoucherModal } from './PromoVoucherModal';
 import { getStoredCustomerUser } from '@/services/authService';
-import { useBodyScrollLock } from '@/lib/scrollLock';
 import { generateDynamicQRIS } from '@/lib/qrisHelper';
 import { supabase } from '@/lib/supabaseClient';
 import { playSuccessChime, requestPushNotificationPermission } from '@/lib/notificationHelper';
+import { ResponsiveModal } from '@/components/ui/responsive-modal';
 
 export const CheckoutModal: React.FC = () => {
   const {
@@ -58,8 +58,6 @@ export const CheckoutModal: React.FC = () => {
     setPendingPaymentOrder,
     clearPendingPayment,
   } = useCartStore();
-
-  useBodyScrollLock(isCheckoutOpen);
 
   const [checkoutStep, setCheckoutStep] = useState<'FORM' | 'QRIS_PAYMENT'>('FORM');
   const [nameInput, setNameInput] = useState(customerName || '');
@@ -338,13 +336,16 @@ export const CheckoutModal: React.FC = () => {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in pb-[env(safe-area-inset-bottom)]">
-        <div 
-          className="w-full sm:max-w-xl bg-white rounded-t-3xl sm:rounded-3xl max-h-[90dvh] sm:max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
-          onClick={(e) => e.stopPropagation()}
-        >
+      <ResponsiveModal
+        open={isCheckoutOpen}
+        onOpenChange={(open) => !open && toggleCheckout(false)}
+        showCloseButton={false}
+        desktopClassName="sm:max-w-xl p-0 overflow-hidden rounded-3xl border-none shadow-2xl bg-white"
+        mobileClassName="max-h-[92vh] p-0 overflow-hidden rounded-t-3xl border-none shadow-2xl bg-white"
+      >
+        <div className="flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="p-4 sm:p-5 bg-charcoal text-white flex items-center justify-between">
+          <div className="p-4 sm:p-5 bg-charcoal text-white flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
               {checkoutStep === 'QRIS_PAYMENT' ? (
                 <button
@@ -368,16 +369,11 @@ export const CheckoutModal: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => {
-                toggleCheckout(false);
-                if (!pendingPaymentOrder) {
-                  setCheckoutStep('FORM');
-                }
-              }}
-              className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
-              aria-label="Tutup Modal"
+              type="button"
+              onClick={() => toggleCheckout(false)}
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all cursor-pointer"
             >
-              <X className="w-5 h-5 text-white" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
@@ -686,7 +682,7 @@ export const CheckoutModal: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
+      </ResponsiveModal>
 
       {/* Promo Voucher Modal */}
       <PromoVoucherModal />

@@ -18,14 +18,13 @@ import {
 import { useCartStore } from '@/store/useCartStore';
 import { OFFICIAL_STORE_WA, OrderStatus, STORE_LOCATION } from '@/types/pos';
 import { supabase } from '@/lib/supabaseClient';
-import { useBodyScrollLock } from '@/lib/scrollLock';
+import { ResponsiveModal } from '@/components/ui/responsive-modal';
 
 // Status values from Kasir App that mean the order is fully completed
 const KASIR_COMPLETED_STATUSES = ['COMPLETED', 'ORDER_FINISH', 'FINISH', 'DONE'];
 
 export const OrderStatusModal: React.FC = () => {
   const { isOrderStatusOpen, toggleOrderStatus, activeOrder, setActiveOrder } = useCartStore();
-  useBodyScrollLock(isOrderStatusOpen);
   const [currentStatus, setCurrentStatus] = useState<OrderStatus>('PENDING');
   const [isCopied, setIsCopied] = useState(false);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
@@ -241,7 +240,7 @@ export const OrderStatusModal: React.FC = () => {
     }
   }, [notificationToast]);
 
-  if (!isMounted || !isOrderStatusOpen || !activeOrder) return null;
+  if (!isMounted || !activeOrder) return null;
 
   const handleCopyOrderId = () => {
     navigator.clipboard.writeText(activeOrder.orderId);
@@ -286,13 +285,16 @@ export const OrderStatusModal: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in pb-[env(safe-area-inset-bottom)]">
-      <div 
-        className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl max-h-[88dvh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResponsiveModal
+      open={isOrderStatusOpen && !!activeOrder}
+      onOpenChange={(open) => !open && toggleOrderStatus(false)}
+      showCloseButton={false}
+      desktopClassName="sm:max-w-lg p-0 overflow-hidden rounded-3xl border-none shadow-2xl bg-white"
+      mobileClassName="max-h-[88vh] p-0 overflow-hidden rounded-t-3xl border-none shadow-2xl bg-white"
+    >
+      <div className="flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="p-4 sm:p-5 bg-charcoal text-white flex items-center justify-between">
+        <div className="p-4 sm:p-5 bg-charcoal text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="relative">
               <ShieldCheck className="w-5 h-5 text-emerald-400" />
@@ -562,7 +564,7 @@ export const OrderStatusModal: React.FC = () => {
         </div>
 
         {/* Clean Footer Action */}
-        <div className="p-4 bg-white border-t border-parchment-border flex flex-col items-center justify-end pb-[calc(1rem+env(safe-area-inset-bottom))] gap-2">
+        <div className="p-4 bg-white border-t border-parchment-border flex flex-col items-center justify-end shrink-0 gap-2">
           <button
             onClick={() => {
               setActiveOrder(null);
@@ -574,7 +576,6 @@ export const OrderStatusModal: React.FC = () => {
           </button>
         </div>
       </div>
-    </div>
+    </ResponsiveModal>
   );
-
 };

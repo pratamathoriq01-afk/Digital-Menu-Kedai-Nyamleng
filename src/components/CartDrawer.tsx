@@ -1,9 +1,7 @@
-'use client';
-
 import React, { useState } from 'react';
 import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, Utensils, Edit3, MessageSquareText } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
-import { useBodyScrollLock } from '@/lib/scrollLock';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 export const CartDrawer: React.FC = () => {
   const {
@@ -23,11 +21,7 @@ export const CartDrawer: React.FC = () => {
     toggleCheckout,
   } = useCartStore();
 
-  useBodyScrollLock(isCartOpen);
-
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-
-  if (!isCartOpen) return null;
 
   const subtotal = getSubtotal();
   const tax = getTaxAmount();
@@ -47,16 +41,14 @@ export const CartDrawer: React.FC = () => {
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs animate-fade-in flex justify-end"
-      onClick={() => toggleCart(false)}
-    >
-      <div 
-        className="w-full sm:w-[420px] max-w-full bg-white flex flex-col shadow-2xl h-full max-h-[100dvh] pb-[env(safe-area-inset-bottom)] animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
+    <Sheet open={isCartOpen} onOpenChange={(open) => !open && toggleCart(false)}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="w-full sm:w-[420px] max-w-full bg-white flex flex-col p-0 border-none shadow-2xl h-full"
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 bg-charcoal text-white flex items-center justify-between shadow-sm">
+        <div className="p-4 sm:p-5 bg-charcoal text-white flex items-center justify-between shadow-sm shrink-0">
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-nyamleng-400" />
             <div>
@@ -262,7 +254,7 @@ export const CartDrawer: React.FC = () => {
             </button>
           </div>
         )}
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 };

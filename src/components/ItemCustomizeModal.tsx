@@ -1,10 +1,8 @@
-'use client';
-
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Minus, Check, MessageSquare, Clock } from 'lucide-react';
 import { MenuItem, SelectedAddOn, SelectedVariant, AddOnOption } from '@/types/pos';
 import { useCartStore } from '@/store/useCartStore';
-import { useBodyScrollLock } from '@/lib/scrollLock';
+import { ResponsiveModal } from '@/components/ui/responsive-modal';
 
 interface ItemCustomizeModalProps {
   item: MenuItem | null;
@@ -17,7 +15,6 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  useBodyScrollLock(isOpen);
   const { addToCart } = useCartStore();
 
   const [selectedVariants, setSelectedVariants] = useState<SelectedVariant[]>([]);
@@ -49,7 +46,7 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
     }
   }, [item]);
 
-  if (!isOpen || !item) return null;
+  if (!item) return null;
 
   const handleVariantSelect = (groupId: string, groupName: string, optionId: string, optionName: string, priceModifier: number) => {
     setSelectedVariants((prev) => {
@@ -62,8 +59,8 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
   };
 
   const handleAddOnToggle = (
-    optionId: string, 
-    optionName: string, 
+    optionId: string,
+    optionName: string,
     price: number,
     groupOptions?: AddOnOption[],
     isSingleSelect?: boolean
@@ -106,23 +103,28 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-      <div 
-        className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResponsiveModal
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      showCloseButton={false}
+      desktopClassName="sm:max-w-lg p-0 overflow-hidden rounded-3xl border-none shadow-2xl bg-white"
+      mobileClassName="max-h-[92vh] p-0 overflow-hidden rounded-t-3xl border-none shadow-2xl bg-white"
+    >
+      <div className="w-full max-h-[90vh] flex flex-col overflow-hidden bg-white">
         {/* Header with image */}
-        <div className="relative w-full h-48 sm:h-56 bg-parchment-soft">
+        <div className="relative w-full h-48 sm:h-56 bg-parchment-soft shrink-0">
           <img
             src={item.image}
             alt={item.name}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-          
+
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors"
+            className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors z-10"
             aria-label="Tutup Modal"
           >
             <X className="w-5 h-5" />
@@ -180,19 +182,17 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
                           option.priceModifier
                         )
                       }
-                      className={`flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
-                        isSelected
+                      className={`flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${isSelected
                           ? 'border-nyamleng-500 bg-nyamleng-50 text-nyamleng-600 shadow-xs'
                           : 'border-parchment-border hover:bg-parchment-soft text-gray-700'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2">
                         <div
-                          className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                            isSelected
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected
                               ? 'border-nyamleng-500 bg-nyamleng-500'
                               : 'border-gray-300'
-                          }`}
+                            }`}
                         >
                           {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
                         </div>
@@ -237,28 +237,25 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
                         type="button"
                         onClick={() =>
                           handleAddOnToggle(
-                            option.id, 
-                            option.name, 
+                            option.id,
+                            option.name,
                             option.price,
                             group.options,
                             group.isSingleSelect
                           )
                         }
-                        className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
-                          isSelected
+                        className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${isSelected
                             ? 'border-nyamleng-500 bg-nyamleng-50 text-nyamleng-600 shadow-xs'
                             : 'border-parchment-border hover:bg-parchment-soft text-gray-700'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2">
                           <div
-                            className={`w-4 h-4 border flex items-center justify-center transition-all ${
-                              group.isSingleSelect ? 'rounded-full' : 'rounded-md'
-                            } ${
-                              isSelected
+                            className={`w-4 h-4 border flex items-center justify-center transition-all ${group.isSingleSelect ? 'rounded-full' : 'rounded-md'
+                              } ${isSelected
                                 ? 'border-nyamleng-500 bg-nyamleng-500'
                                 : 'border-gray-300 bg-white'
-                            }`}
+                              }`}
                           >
                             {isSelected && <Check className="w-3 h-3 text-white" />}
                           </div>
@@ -323,6 +320,6 @@ export const ItemCustomizeModal: React.FC<ItemCustomizeModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </ResponsiveModal>
   );
 };

@@ -18,7 +18,7 @@ import {
 import { CustomerUser, setStoredCustomerUser } from '@/services/authService';
 import { supabase } from '@/lib/supabaseClient';
 import { useCartStore } from '@/store/useCartStore';
-import { useBodyScrollLock } from '@/lib/scrollLock';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { StoreStatusModal } from './StoreStatusModal';
 
 interface OrderHistoryDrawerProps {
@@ -34,7 +34,6 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
   currentUser,
   onLogout,
 }) => {
-  useBodyScrollLock(isOpen);
   const [historyOrders, setHistoryOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isStoreStatusModalOpen, setIsStoreStatusModalOpen] = useState(false);
@@ -62,14 +61,10 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
         }
 
         const { data, error } = await query;
-
-        if (error) {
-          console.error('[Fetch History Error]:', error.message);
-        } else {
-          setHistoryOrders(data || []);
-        }
+        if (error) throw error;
+        setHistoryOrders(data || []);
       } catch (err) {
-        console.error('[Fetch History Exception]:', err);
+        console.error('Fetch history error:', err);
       } finally {
         setIsLoading(false);
       }
@@ -78,15 +73,16 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
     fetchCustomerHistory();
   }, [isOpen, currentUser, customerOrderIds]);
 
-
-  const handleOrderClick = (order: any) => {
+  const handleOpenReceipt = (order: any) => {
     const cartItems = (order.items || []).map((item: any) => ({
-      cartItemId: item.id || `item-${Math.random()}`,
-      menuItem: {
-        id: item.menuItemId || 'menu-item',
-        name: item.nameSnapshot || 'Menu Nyamleng',
+      item: {
+        id: item.menuItemId || item.id,
+        posSku: item.menuItemId ? item.menuItemId.slice(-6).toUpperCase() : 'SKU-001',
+        name: item.itemName || 'Menu Item',
         description: '',
         price: item.priceSnapshot || 0,
+        categoryId: 'makanan',
+        image: item.itemImage || '',
         category: 'food',
         imageUrl: '',
         isAvailable: true
@@ -143,13 +139,11 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-fade-in">
-      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-slide-left border-l border-parchment-border">
-        
-        {/* Header Drawer */}
+    <>
+      <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <SheetContent side="right" showCloseButton={false} className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col p-0 border-none">
+          {/* Header Drawer */}
         <div className="p-4 bg-nyamleng-600 text-white flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2 font-black text-sm">
             <History className="w-5 h-5" />
@@ -202,7 +196,7 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
               return (
                 <div 
                   key={order.id} 
-                  onClick={() => handleOrderClick(order)}
+                  onClick={() => handleOpenReceipt(order)}
                   className="bg-white rounded-2xl p-4 border border-parchment-border shadow-xs hover:border-nyamleng-400 hover:shadow-md transition-all space-y-3 cursor-pointer active:scale-[0.99] group"
                 >
                   {/* Order ID & Date */}
@@ -282,13 +276,14 @@ export const OrderHistoryDrawer: React.FC<OrderHistoryDrawerProps> = ({
           </div>
           <p className="text-[10px]">Kota Malang, Jawa Timur • Terintegrasi Realtime POS</p>
         </div>
-      </div>
+      </SheetContent>
+    </Sheet>
 
-      {/* Store Status Control Modal */}
-      <StoreStatusModal
-        isOpen={isStoreStatusModalOpen}
-        onClose={() => setIsStoreStatusModalOpen(false)}
-      />
-    </div>
+    {/* Store Status Control Modal */}
+    <StoreStatusModal
+      isOpen={isStoreStatusModalOpen}
+      onClose={() => setIsStoreStatusModalOpen(false)}
+    />
+    </>
   );
 };

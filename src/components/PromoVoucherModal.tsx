@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { X, ArrowLeft, Ticket, CheckCircle2, Clock, AlertCircle, Sparkles } from 'lucide-react';
 import { useCartStore } from '@/store/useCartStore';
 import { Voucher } from '@/types/pos';
-import { useBodyScrollLock } from '@/lib/scrollLock';
+import { ResponsiveModal } from '@/components/ui/responsive-modal';
 
 export const PromoVoucherModal: React.FC = () => {
   const {
@@ -17,11 +17,7 @@ export const PromoVoucherModal: React.FC = () => {
     getSubtotal,
   } = useCartStore();
 
-  useBodyScrollLock(isVoucherModalOpen);
-
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
-
-  if (!isVoucherModalOpen) return null;
 
   const subtotal = getSubtotal();
 
@@ -45,13 +41,16 @@ export const PromoVoucherModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-      <div 
-        className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ResponsiveModal
+      open={isVoucherModalOpen}
+      onOpenChange={(open) => !open && toggleVoucherModal(false)}
+      showCloseButton={false}
+      desktopClassName="sm:max-w-md p-0 overflow-hidden rounded-3xl border-none shadow-2xl bg-white"
+      mobileClassName="max-h-[90vh] p-0 overflow-hidden rounded-t-3xl border-none shadow-2xl bg-white"
+    >
+      <div className="flex flex-col h-full overflow-hidden">
         {/* Top Header */}
-        <div className="p-4 sm:p-5 bg-white border-b border-parchment-border flex items-center justify-between shadow-xs">
+        <div className="p-4 sm:p-5 bg-white border-b border-parchment-border flex items-center justify-between shadow-xs shrink-0">
           <button
             onClick={() => toggleVoucherModal(false)}
             className="p-1.5 hover:bg-parchment-soft rounded-full text-charcoal transition-colors flex items-center gap-2"
@@ -177,15 +176,15 @@ export const PromoVoucherModal: React.FC = () => {
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 bg-white border-t border-parchment-border">
+        <div className="p-4 bg-white border-t border-parchment-border shrink-0">
           <button
             onClick={() => toggleVoucherModal(false)}
-            className="w-full py-3.5 px-4 bg-nyamleng-500 hover:bg-nyamleng-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all"
+            className="w-full py-3.5 px-4 bg-nyamleng-500 hover:bg-nyamleng-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all cursor-pointer"
           >
             Selesai
           </button>
         </div>
       </div>
-    </div>
+    </ResponsiveModal>
   );
 };
