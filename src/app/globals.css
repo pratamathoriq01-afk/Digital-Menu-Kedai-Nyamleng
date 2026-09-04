@@ -114,3 +114,29 @@ html {
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
 }
+
+/* Shadcn Base UI Drawer Smooth Slide In & Out */
+[data-slot="drawer-overlay"] {
+  transition: opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+[data-slot="drawer-content"] {
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@starting-style {
+  [data-slot="drawer-content"] {
+    transform: translateY(100%);
+  }
+  [data-slot="drawer-overlay"] {
+    opacity: 0;
+  }
+}
+
+[data-slot="drawer-content"][data-ending-style] {
+  transform: translateY(100%) !important;
+}
+
+[data-slot="drawer-overlay"][data-ending-style] {
+  opacity: 0 !important;
+}

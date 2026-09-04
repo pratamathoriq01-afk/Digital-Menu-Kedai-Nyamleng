@@ -47,15 +47,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id" className={cn(inter.variable, lexend.variable)}>
-      <body 
-        suppressHydrationWarning 
-        className={`${inter.className} antialiased selection:bg-nyamleng-500 selection:text-white bg-parchment text-charcoal min-h-screen flex flex-col`}
+      <body
+        suppressHydrationWarning
+        className={`${inter.className} relative antialiased selection:bg-nyamleng-500 selection:text-white bg-parchment text-charcoal min-h-screen flex flex-col`}
       >
         {children}
         <SpeedInsights />
-        <Script 
-          src="https://accounts.google.com/gsi/client" 
-          strategy="afterInteractive" 
+        <Script
+          src="https://accounts.google.com/gsi/client"
+          strategy="afterInteractive"
         />
       </body>
     </html>
