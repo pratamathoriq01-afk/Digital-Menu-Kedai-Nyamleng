@@ -24,8 +24,11 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = memo(({ item, onOpenCus
   const hasOptions = (item.variantGroups && item.variantGroups.length > 0) || 
                      (item.addOnGroups && item.addOnGroups.length > 0);
 
+  const isAvailable = item.isAvailable !== false;
+
   const handleAddClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isAvailable) return;
     if (hasOptions) {
       onOpenCustomize(item);
     } else {
@@ -35,6 +38,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = memo(({ item, onOpenCus
 
   const handleMinusClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isAvailable) return;
     const cartItem = cartItems.find((ci) => ci.menuItem.id === item.id);
     if (cartItem) {
       updateQuantity(cartItem.cartItemId, -1);
@@ -51,19 +55,37 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = memo(({ item, onOpenCus
 
   return (
     <Card
-      onClick={() => onOpenCustomize(item)}
-      className="group relative bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer p-0 h-full"
+      onClick={() => {
+        if (!isAvailable) return;
+        onOpenCustomize(item);
+      }}
+      className={`group relative bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs transition-all duration-200 flex flex-col justify-between p-0 h-full ${
+        isAvailable 
+          ? 'hover:shadow-lg hover:-translate-y-0.5 cursor-pointer' 
+          : 'opacity-75 cursor-not-allowed bg-slate-50/70 dark:bg-slate-900/70'
+      }`}
     >
       {/* Image Container with compact aspect ratio */}
       <div className="relative w-full aspect-square sm:aspect-[4/3] max-h-36 sm:max-h-52 overflow-hidden bg-slate-100 dark:bg-slate-800">
         <img
           src={item.image}
           alt={item.name}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className={`w-full h-full object-cover transition-transform duration-300 ${
+            isAvailable ? 'group-hover:scale-105' : 'grayscale contrast-75'
+          }`}
           loading="lazy"
           decoding="async"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+        {/* Sold Out Watermark Badge */}
+        {!isAvailable && (
+          <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-20">
+            <span className="px-3 py-1 bg-red-600/95 text-white font-black text-xs sm:text-sm tracking-wider uppercase rounded-xl shadow-lg border border-red-400/30 rotate-[-6deg]">
+              Habis / Sold Out
+            </span>
+          </div>
+        )}
 
         {/* Tags Overlay */}
         <div className="absolute top-2 left-2 flex flex-wrap gap-1 z-10">
@@ -127,7 +149,11 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = memo(({ item, onOpenCus
 
           {/* Add / Quantity Button */}
           <div className="shrink-0">
-            {itemInCartCount > 0 && !hasOptions ? (
+            {!isAvailable ? (
+              <span className="inline-flex items-center px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 font-bold text-[10px] sm:text-xs rounded-lg border border-slate-200 dark:border-slate-700">
+                Habis
+              </span>
+            ) : itemInCartCount > 0 && !hasOptions ? (
               <div className="flex items-center gap-1 bg-orange-600 text-white p-0.5 rounded-lg shadow-sm">
                 <Button
                   size="icon"

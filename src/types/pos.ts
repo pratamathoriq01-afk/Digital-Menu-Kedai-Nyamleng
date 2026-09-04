@@ -30,6 +30,7 @@ export interface StoreSettings {
   isAutoSchedule: boolean;
   closedReason?: string | null;
   updatedAt?: string | Date;
+  weeklySchedule?: string | null;
 }
 
 export interface Voucher {
@@ -94,6 +95,7 @@ export interface MenuItem {
   preparationTimeMinutes?: number;
   variantGroups?: VariantGroup[];
   addOnGroups?: AddOnGroup[];
+  allowedAddOnCategories?: string[];
 }
 
 export interface SelectedVariant {

@@ -40,6 +40,27 @@ export const OrderStatusModal: React.FC = () => {
     if (activeOrder) {
       setCurrentStatus(activeOrder.orderStatus || 'PENDING');
 
+      const syncLatestStatus = async () => {
+        try {
+          const { data } = await supabase
+            .from('Transaction')
+            .select('orderStatus')
+            .eq('id', activeOrder.orderId)
+            .maybeSingle();
+
+          if (data && data.orderStatus) {
+            const raw = data.orderStatus.toUpperCase();
+            const mapped = KASIR_COMPLETED_STATUSES.includes(raw) ? 'COMPLETED' : (data.orderStatus as OrderStatus);
+            setCurrentStatus(mapped);
+            useCartStore.setState((state) => ({
+              activeOrder: state.activeOrder ? { ...state.activeOrder, orderStatus: mapped } : null,
+            }));
+          }
+        } catch (e) {
+          console.warn('[OrderStatusModal] Error checking order status:', e);
+        }
+      };
+
       // Realtime listener for active order status changes from Kasir App
       const channel = supabase
         .channel(`order_status_modal_${activeOrder.orderId}`)
@@ -55,29 +76,32 @@ export const OrderStatusModal: React.FC = () => {
             const updated = payload.new;
             if (updated && updated.orderStatus) {
               const rawStatus = updated.orderStatus.toUpperCase();
+              const finalStatus: OrderStatus = KASIR_COMPLETED_STATUSES.includes(rawStatus)
+                ? 'COMPLETED'
+                : (updated.orderStatus as OrderStatus);
 
-              // If Kasir marks order as COMPLETED/FINISH → auto-clear and close modal
-              if (KASIR_COMPLETED_STATUSES.includes(rawStatus)) {
-                console.log(`[OrderStatusModal] Order completed by Kasir. Clearing activeOrder.`);
-                setActiveOrder(null);
-                toggleOrderStatus(false);
-                return;
-              }
-
-              setCurrentStatus(updated.orderStatus);
+              setCurrentStatus(finalStatus);
               useCartStore.setState((state) => ({
-                activeOrder: state.activeOrder ? { ...state.activeOrder, orderStatus: updated.orderStatus } : null,
+                activeOrder: state.activeOrder ? { ...state.activeOrder, orderStatus: finalStatus } : null,
               }));
             }
           }
         )
         .subscribe();
 
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          syncLatestStatus();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
       return () => {
         supabase.removeChannel(channel);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     }
-  }, [activeOrder, setActiveOrder, toggleOrderStatus]);
+  }, [activeOrder?.orderId]);
 
 
   // Realtime Timestamp Tracker (Seconds elapsed since order creation)

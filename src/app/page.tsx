@@ -29,8 +29,12 @@ import { useCartStore } from '@/store/useCartStore';
 import { CustomerUser, getStoredCustomerUser, setStoredCustomerUser, syncCustomerToSupabase, handleSupabaseLogout } from '@/services/authService';
 import { MenuItem, OFFICIAL_STORE_WA } from '@/types/pos';
 import { supabase } from '@/lib/supabaseClient';
+import { useRealtimeMenuSync } from '@/hooks/useRealtimeMenuSync';
 
 export default function Home() {
+  // 1. Centralized Realtime & Mobile Wake Sync
+  useRealtimeMenuSync();
+
   const {
     menuItems,
     fetchMenuItems,
@@ -57,40 +61,6 @@ export default function Home() {
   const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    fetchMenuItems();
-
-    // 1. Smart 10s fallback menu & voucher sync poller
-    const syncPoller = setInterval(() => {
-      fetchMenuItems().catch(() => {});
-    }, 10000);
-
-    // 2. Supabase Realtime WebSocket Subscription for instant Kasir updates (0ms delay)
-    const channel = supabase
-      .channel('realtime_menu_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'MenuItem' }, () => {
-        fetchMenuItems().catch(() => {});
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'AddOn' }, () => {
-        // Re-fetch menu items so add-ons are re-attached dynamically
-        fetchMenuItems().catch(() => {});
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'StoreSettings' }, () => {
-        fetchSupabaseStoreSettings().then((settings) => {
-          if (settings) {
-            useCartStore.setState({ storeSettings: settings });
-          }
-        }).catch(() => {});
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'Voucher' }, () => {
-        fetchSupabaseVouchers().then((vouchers) => {
-          if (vouchers && Array.isArray(vouchers)) {
-            useCartStore.setState({ availableVouchers: vouchers });
-          }
-        }).catch(() => {});
-      })
-      .subscribe();
-
-
     // 1. Periksa apakah ada payload user dari Google OAuth Redirect URL (?login_success=true&user=...)
     let activeUser: CustomerUser | null = null;
 
@@ -218,6 +188,18 @@ export default function Home() {
     return matchesCategory && matchesSearch;
   });
 
+  // Active Category Details
+  const activeCategory = React.useMemo(() => {
+    if (selectedCategory === 'all') return null;
+    const item = menuItems.find((m) => m.categoryId === selectedCategory);
+    if (!item) return null;
+    const rawName = item.categoryName || item.categoryId;
+    return {
+      name: rawName,
+      icon: getCategoryIcon(rawName),
+    };
+  }, [selectedCategory, menuItems]);
+
   // Dynamic Category Section Grouping (when viewing "Semua Menu" without active search query)
   const groupedSections = React.useMemo(() => {
     if (selectedCategory !== 'all' || searchQuery) {
@@ -288,9 +270,17 @@ export default function Home() {
             {/* Section Title Bar */}
             <div className="flex items-center justify-between bg-white p-3.5 rounded-2xl border border-parchment-border shadow-xs">
               <div className="flex items-center gap-2">
-                <Flame className="w-5 h-5 text-nyamleng-500" />
+                {activeCategory ? (
+                  <span className="text-xl">{activeCategory.icon}</span>
+                ) : (
+                  <Flame className="w-5 h-5 text-nyamleng-500" />
+                )}
                 <h2 className="font-extrabold text-sm sm:text-base text-charcoal">
-                  {searchQuery ? `Hasil Pencarian: "${searchQuery}"` : 'Daftar Menu Khas Kedai'}
+                  {searchQuery
+                    ? `Hasil Pencarian: "${searchQuery}"`
+                    : activeCategory
+                    ? activeCategory.name
+                    : 'Daftar Menu Khas Kedai'}
                 </h2>
               </div>
 

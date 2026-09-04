@@ -2,11 +2,12 @@ import { supabase } from '@/lib/supabaseClient';
 import { MenuItem, AddOnOption, AddOnGroup, StoreSettings, VariantGroup } from '@/types/pos';
 
 // Mapping kategori Kasir App → slug yang digunakan di Menu Digital
-const CATEGORY_SLUG_MAP: Record<string, string> = {
+export const CATEGORY_SLUG_MAP: Record<string, string> = {
   'menu ayam nyamleng': 'ayam-nyamleng',
   'menu ikan nyamleng': 'ikan-nyamleng',
   'menu minuman': 'minuman',
   'menu alacarte': 'alacarte',
+  'menu tahu tempe': 'menu-tahu-tempe',
   'cemilan & snack': 'snack',
   'cemilan dan snack': 'snack',
   'paket hemat': 'paket-hemat',
@@ -20,12 +21,13 @@ const CATEGORY_SLUG_MAP: Record<string, string> = {
 export const mapCategoryToSlug = (rawCategory: string): string => {
   const lower = (rawCategory || '').toLowerCase().trim();
   if (CATEGORY_SLUG_MAP[lower]) return CATEGORY_SLUG_MAP[lower];
+  if (lower.includes('paket') || lower.includes('bundling') || lower.includes('komplit') || lower.includes('promo')) return 'paket-hemat';
   if (lower.includes('ayam')) return 'ayam-nyamleng';
-  if (lower.includes('ikan')) return 'ikan-nyamleng';
-  if (lower.includes('minum')) return 'minuman';
+  if (lower.includes('ikan') || lower.includes('seafood') || lower.includes('tongkol') || lower.includes('lele') || lower.includes('bebek')) return 'ikan-nyamleng';
+  if (lower.includes('tahu') || lower.includes('tempe')) return 'menu-tahu-tempe';
   if (lower.includes('alacarte') || lower.includes('ala carte')) return 'alacarte';
-  if (lower.includes('cemil') || lower.includes('snack')) return 'snack';
-  if (lower.includes('paket') || lower.includes('hemat')) return 'paket-hemat';
+  if (lower.includes('cemil') || lower.includes('snack') || lower.includes('gorengan')) return 'snack';
+  if (lower.includes('minum') || lower.includes('drink') || lower.includes('beverage') || lower.includes('es ') || lower.includes('kopi')) return 'minuman';
   if (lower.includes('dessert')) return 'dessert';
   return 'makanan';
 };
@@ -38,9 +40,8 @@ export function getCategorySortRank(categoryName: string): number {
   if (cat.includes('paket') || cat.includes('bundling') || cat.includes('komplit') || cat.includes('promo')) return 1;
   if (cat.includes('ayam')) return 2;
   if (cat.includes('ikan') || cat.includes('seafood') || cat.includes('tongkol') || cat.includes('lele') || cat.includes('bebek')) return 3;
-  if (cat.includes('tahu') || cat.includes('tempe')) return 4;
-  if (cat.includes('alacarte') || cat.includes('ala carte') || cat.includes('makanan')) return 5;
-  if (cat.includes('snack') || cat.includes('cemilan') || cat.includes('gorengan') || cat.includes('dessert') || cat.includes('sambal')) return 6;
+  if (cat.includes('alacarte') || cat.includes('ala carte') || cat.includes('tahu') || cat.includes('tempe') || cat.includes('makanan')) return 4;
+  if (cat.includes('snack') || cat.includes('cemilan') || cat.includes('gorengan') || cat.includes('dessert') || cat.includes('sambal')) return 5;
   if (cat.includes('minuman') || cat.includes('drink') || cat.includes('beverage') || cat.includes('es ') || cat.includes('kopi')) return 99;
   return 10;
 }
@@ -105,6 +106,7 @@ export const fetchSupabaseStoreSettings = async (): Promise<StoreSettings> => {
       isAutoSchedule: data.isAutoSchedule !== undefined ? Boolean(data.isAutoSchedule) : true,
       closedReason: data.closedReason || DEFAULT_STORE_SETTINGS.closedReason,
       updatedAt: data.updatedAt,
+      weeklySchedule: data.weeklySchedule || null,
     };
   } catch (err) {
     console.error('[Supabase StoreSettings Exception]:', err);
@@ -143,7 +145,6 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
     const { data, error } = await supabase
       .from('MenuItem')
       .select('*')
-      .eq('isActive', true)
       .order('category', { ascending: true })
       .order('name', { ascending: true });
 
@@ -164,215 +165,249 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
       .order('name', { ascending: true });
 
     const allAddOns: any[] = addOnsData || [];
+    const activeAddOns = allAddOns.filter((a) => a.isActive);
+
+    // Active drinks from etalase menu items (for Paket Hemat inclusion)
+    const etalaseDrinks = (data || [])
+      .filter((m: any) => {
+        const cat = (m.category || '').toLowerCase();
+        const active = m.isActive !== undefined ? Boolean(m.isActive) : true;
+        return active && (cat.includes('minum') || cat.includes('drink'));
+      })
+      .map((m: any) => ({
+        id: `etalase-drink-${m.id}`,
+        name: `${m.name} (Paket)`,
+        price: 0,
+        category: '🍹 Pilihan Minuman Paket',
+        isActive: true,
+      }));
+
+    // 1. Nasi / Karbo Add-Ons
+    const rawNasiAddOns = activeAddOns.filter((a) => {
+      const cat = (a.category || '').toLowerCase();
+      const name = (a.name || '').toLowerCase();
+      return (
+        cat === '🍚 pilihan nasi' ||
+        cat.includes('nasi') ||
+        cat.includes('karbo') ||
+        name.includes('nasi putih') ||
+        name.includes('nasi daun jeruk') ||
+        name.includes('tanpa nasi') ||
+        (name.includes('nasi') && !name.includes('tahu'))
+      );
+    });
+
+    // 2. Sambal Add-Ons
+    const rawSambalAddOns = activeAddOns.filter((a) => {
+      if (rawNasiAddOns.includes(a)) return false;
+      const cat = (a.category || '').toLowerCase();
+      const name = (a.name || '').toLowerCase();
+      return (
+        cat === '🌶️ pilihan sambal' ||
+        cat.includes('sambal') ||
+        name.includes('sambal') ||
+        name.includes('bawang') ||
+        name.includes('hijau') ||
+        name.includes('matah') ||
+        name.includes('terasi')
+      );
+    });
+
+    // 3. Pedas Add-Ons
+    const rawPedasAddOns = activeAddOns.filter((a) => {
+      if (rawNasiAddOns.includes(a) || rawSambalAddOns.includes(a)) return false;
+      const cat = (a.category || '').toLowerCase();
+      const name = (a.name || '').toLowerCase();
+      return (
+        cat === '🔥 level pedas' ||
+        cat.includes('pedas') ||
+        name.includes('pedas') ||
+        name.includes('level') ||
+        name.includes('sedang') ||
+        name.includes('super')
+      );
+    });
+
+    // 4. Paket Drink Add-Ons (Custom + Etalase Drinks)
+    const rawPaketDrinkAddOns = activeAddOns.filter((a) => {
+      if (rawNasiAddOns.includes(a) || rawSambalAddOns.includes(a) || rawPedasAddOns.includes(a)) return false;
+      const cat = (a.category || '').toLowerCase();
+      const name = (a.name || '').toLowerCase();
+      return (
+        cat === '🍹 pilihan minuman paket' ||
+        cat.includes('minuman paket') ||
+        cat.includes('minum') ||
+        name.includes('(paket)') ||
+        (name.includes('es') && name.includes('teh')) ||
+        (name.includes('es') && name.includes('jeruk')) ||
+        name.includes('mineral') ||
+        name.includes('teh manis')
+      );
+    });
+
+    const combinedPaketDrinkAddOns = [...rawPaketDrinkAddOns];
+    for (const ed of etalaseDrinks) {
+      const cleanEdName = ed.name.toLowerCase().replace(/\s*\(.*?\)/g, '').trim();
+      const exists = combinedPaketDrinkAddOns.some((a) => {
+        const cleanAName = (a.name || '').toLowerCase().replace(/\s*\(.*?\)/g, '').trim();
+        return cleanAName === cleanEdName;
+      });
+      if (!exists) {
+        combinedPaketDrinkAddOns.push(ed);
+      }
+    }
+
+    // 5. Ice / Suhu Add-Ons
+    const rawIceAddOns = activeAddOns.filter((a) => {
+      if (rawNasiAddOns.includes(a) || rawPaketDrinkAddOns.includes(a)) return false;
+      const cat = (a.category || '').toLowerCase();
+      const name = (a.name || '').toLowerCase();
+      return (
+        cat === '🥤 pilihan es & gula' ||
+        cat === 'semua minuman' ||
+        cat.includes('es') ||
+        cat.includes('suhu') ||
+        name.includes('es normal') ||
+        name.includes('es sedikit') ||
+        name.includes('tanpa es') ||
+        name.includes('less ice') ||
+        name.includes('hangat')
+      );
+    });
+
+    // 6. Sugar / Manis Add-Ons
+    const rawSugarAddOns = activeAddOns.filter((a) => {
+      if (rawNasiAddOns.includes(a) || rawPaketDrinkAddOns.includes(a) || rawIceAddOns.includes(a)) return false;
+      const cat = (a.category || '').toLowerCase();
+      const name = (a.name || '').toLowerCase();
+      return (
+        cat === '🍬 level manis' ||
+        cat.includes('gula') ||
+        cat.includes('manis') ||
+        name.includes('gula normal') ||
+        name.includes('gula sedikit') ||
+        name.includes('tanpa gula') ||
+        name.includes('less sugar')
+      );
+    });
+
+    // 7. Topping & General Add-Ons (Tahu, Tempe, Terong, Telur)
+    const rawToppingAddOns = activeAddOns.filter(
+      (a) =>
+        !rawNasiAddOns.includes(a) &&
+        !rawPaketDrinkAddOns.includes(a) &&
+        !rawIceAddOns.includes(a) &&
+        !rawSugarAddOns.includes(a) &&
+        !rawSambalAddOns.includes(a) &&
+        !rawPedasAddOns.includes(a)
+    );
 
     const mappedItems: MenuItem[] = data.map((item: any) => {
       const categorySlug = mapCategoryToSlug(item.category || '');
       const isDrink = categorySlug === 'minuman' || (item.category || '').toLowerCase().includes('minuman');
+      const isPaketItem =
+        (item.category || '').toLowerCase().includes('paket') ||
+        (item.category || '').toLowerCase().includes('bundling') ||
+        item.name.toLowerCase().includes('paket') ||
+        item.name.toLowerCase().includes('bundling');
+      const isFoodItem = !isDrink;
 
-      // Helper to identify food-specific add-ons
-      const isFoodAddOn = (a: any) => {
-        const cat = (a.category || '').toLowerCase();
-        const name = (a.name || '').toLowerCase();
-        return (
-          cat.includes('lauk') ||
-          cat.includes('makanan') ||
-          cat.includes('sambal') ||
-          cat.includes('pedas') ||
-          name.includes('tahu') ||
-          name.includes('tempe') ||
-          name.includes('terong') ||
-          name.includes('nasi') ||
-          name.includes('telur') ||
-          name.includes('sambal') ||
-          name.includes('pedas') ||
-          name.includes('ayam') ||
-          name.includes('bebek') ||
-          name.includes('ikan')
-        );
+      // Check allowed categories configured in Kasir App
+      const allowedCats: string[] | null = Array.isArray(item.allowedAddOnCategories) && item.allowedAddOnCategories.length > 0
+        ? item.allowedAddOnCategories
+        : null;
+
+      // Resilient category check matching clean string (identical to Kasir App AddOnPickerModal)
+      const isGroupAllowed = (standardGroup: string, defaultCheck: boolean) => {
+        if (allowedCats && allowedCats.length > 0) {
+          const cleanStandard = standardGroup.toLowerCase().replace(/[^\w\s]/g, '').trim();
+          return allowedCats.some((c) => {
+            const cleanC = (c || '').toLowerCase().replace(/[^\w\s]/g, '').trim();
+            return cleanC === cleanStandard || cleanC.includes(cleanStandard) || cleanStandard.includes(cleanC);
+          });
+        }
+        return defaultCheck;
       };
 
-      // Smart Section Categorization mirroring Kasir App (AddOnPickerModal.tsx)
-      const activeAddOns = allAddOns.filter((a) => a.isActive);
-
-      // 1. Nasi / Karbo Add-Ons (First Priority: Any item with Pilihan Nasi, nasi, or karbo)
-      const nasiAddOns = activeAddOns.filter((a) => {
-        const cat = (a.category || '').toLowerCase();
-        const name = (a.name || '').toLowerCase();
-        return (
-          cat.includes('nasi') ||
-          cat.includes('karbo') ||
-          name.includes('nasi putih') ||
-          name.includes('nasi daun jeruk') ||
-          name.includes('tanpa nasi') ||
-          (name.includes('nasi') && !name.includes('tahu'))
-        );
-      });
-
-      // 2. Paket Drink Add-Ons (Beverages provided for Paket Hemat / Combos)
-      const paketDrinkAddOns = activeAddOns.filter((a) => {
-        if (nasiAddOns.includes(a)) return false;
-        const cat = (a.category || '').toLowerCase();
-        const name = (a.name || '').toLowerCase();
-        return (
-          cat.includes('minuman paket') ||
-          cat.includes('pilihan minuman') ||
-          name.includes('(paket)') ||
-          (name.includes('es') && name.includes('teh')) ||
-          (name.includes('es') && name.includes('jeruk')) ||
-          name.includes('mineral') ||
-          name.includes('teh manis')
-        );
-      });
-
-      // 3. Ice / Suhu Add-Ons
-      const iceAddOns = activeAddOns.filter((a) => {
-        if (nasiAddOns.includes(a) || paketDrinkAddOns.includes(a)) return false;
-        const cat = (a.category || '').toLowerCase();
-        const name = (a.name || '').toLowerCase();
-        return (
-          cat.includes('es') ||
-          cat.includes('suhu') ||
-          cat.includes('ice') ||
-          name.includes('es normal') ||
-          name.includes('es sedikit') ||
-          name.includes('tanpa es') ||
-          name.includes('less ice') ||
-          name.includes('hangat')
-        );
-      });
-
-      // 4. Sugar / Manis Add-Ons
-      const sugarAddOns = activeAddOns.filter((a) => {
-        if (nasiAddOns.includes(a) || paketDrinkAddOns.includes(a) || iceAddOns.includes(a)) return false;
-        const cat = (a.category || '').toLowerCase();
-        const name = (a.name || '').toLowerCase();
-        return (
-          cat.includes('gula') ||
-          cat.includes('manis') ||
-          name.includes('gula normal') ||
-          name.includes('gula sedikit') ||
-          name.includes('tanpa gula') ||
-          name.includes('less sugar')
-        );
-      });
-
-      // 5. Sambal Add-Ons
-      const sambalAddOns = activeAddOns.filter((a) => {
-        if (nasiAddOns.includes(a) || paketDrinkAddOns.includes(a) || iceAddOns.includes(a) || sugarAddOns.includes(a)) return false;
-        const cat = (a.category || '').toLowerCase();
-        const name = (a.name || '').toLowerCase();
-        return (
-          cat.includes('sambal') ||
-          name.includes('sambal') ||
-          name.includes('bawang') ||
-          name.includes('hijau') ||
-          name.includes('matah') ||
-          name.includes('terasi')
-        );
-      });
-
-      // 6. Pedas Add-Ons
-      const pedasAddOns = activeAddOns.filter((a) => {
-        if (nasiAddOns.includes(a) || paketDrinkAddOns.includes(a) || iceAddOns.includes(a) || sugarAddOns.includes(a) || sambalAddOns.includes(a)) return false;
-        const cat = (a.category || '').toLowerCase();
-        const name = (a.name || '').toLowerCase();
-        return (
-          cat.includes('pedas') ||
-          name.includes('pedas') ||
-          name.includes('level') ||
-          name.includes('sedang') ||
-          name.includes('super')
-        );
-      });
-
-      // 7. Food Topping / General Add-Ons (Tahu, Tempe, Terong, Telur)
-      const foodToppingAddOns = activeAddOns.filter(
-        (a) =>
-          !nasiAddOns.includes(a) &&
-          !paketDrinkAddOns.includes(a) &&
-          !iceAddOns.includes(a) &&
-          !sugarAddOns.includes(a) &&
-          !sambalAddOns.includes(a) &&
-          !pedasAddOns.includes(a)
-      );
+      // Specific filtering per group
+      const nasiAddOns = isGroupAllowed('Pilihan Nasi', isFoodItem && !item.name.toLowerCase().includes('sego')) ? rawNasiAddOns : [];
+      const sambalAddOns = isGroupAllowed('Pilihan Sambal', isFoodItem) ? rawSambalAddOns : [];
+      const pedasAddOns = isGroupAllowed('Level Pedas', isFoodItem) ? rawPedasAddOns : [];
+      const paketDrinkAddOns = isGroupAllowed('Pilihan Minuman Paket', isPaketItem) ? combinedPaketDrinkAddOns : [];
+      const iceAddOns = (isGroupAllowed('Level Es', !isFoodItem) || isGroupAllowed('Pilihan Es & Gula', !isFoodItem)) ? rawIceAddOns : [];
+      const sugarAddOns = (isGroupAllowed('Level Manis', !isFoodItem) || isGroupAllowed('Pilihan Es & Gula', !isFoodItem)) ? rawSugarAddOns : [];
+      const toppingAddOns = isGroupAllowed('Ekstra Topping', isFoodItem) ? rawToppingAddOns : [];
 
       const addOnGroups: AddOnGroup[] = [];
 
-      if (isDrink) {
-        if (iceAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-ice',
-            name: '🧊 Pilihan Level Es / Suhu',
-            isSingleSelect: true,
-            options: iceAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
-        if (sugarAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-sugar',
-            name: '🍬 Pilihan Level Gula',
-            isSingleSelect: true,
-            options: sugarAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
-      } else {
-        // Food item or Paket Hemat
-        if (nasiAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-nasi',
-            name: '🍚 Pilihan Nasi / Karbo',
-            isSingleSelect: true,
-            options: nasiAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
-        if (paketDrinkAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-paket-drink',
-            name: '🍹 Pilihan Minuman Paket',
-            isSingleSelect: true,
-            options: paketDrinkAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
-        if (iceAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-ice',
-            name: '🧊 Level Es / Suhu Minuman',
-            isSingleSelect: true,
-            options: iceAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
-        if (sugarAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-sugar',
-            name: '🍬 Level Gula Minuman',
-            isSingleSelect: true,
-            options: sugarAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
-        if (sambalAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-sambal',
-            name: '🌶️ Pilihan Jenis Sambal',
-            isSingleSelect: true,
-            options: sambalAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
-        if (pedasAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-pedas',
-            name: '🔥 Level Kepedasan Sambal',
-            isSingleSelect: true,
-            options: pedasAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
-        if (foodToppingAddOns.length > 0) {
-          addOnGroups.push({
-            id: 'group-topping-food',
-            name: '🍳 Ekstra Topping & Lauk Tambahan',
-            isSingleSelect: false,
-            options: foodToppingAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
-          });
-        }
+      // 1. Minuman Paket (Only for Paket Hemat)
+      if (paketDrinkAddOns.length > 0) {
+        addOnGroups.push({
+          id: 'group-paket-drink',
+          name: '🍹 Pilihan Minuman Paket',
+          isSingleSelect: true,
+          options: paketDrinkAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+        });
+      }
+
+      // 2. Nasi / Karbo
+      if (nasiAddOns.length > 0) {
+        addOnGroups.push({
+          id: 'group-nasi',
+          name: '🍚 Pilihan Nasi / Karbo',
+          isSingleSelect: true,
+          options: nasiAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+        });
+      }
+
+      // 3. Sambal
+      if (sambalAddOns.length > 0) {
+        addOnGroups.push({
+          id: 'group-sambal',
+          name: '🌶️ Pilihan Jenis Sambal',
+          isSingleSelect: true,
+          options: sambalAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+        });
+      }
+
+      // 4. Pedas
+      if (pedasAddOns.length > 0) {
+        addOnGroups.push({
+          id: 'group-pedas',
+          name: '🔥 Level Kepedasan Sambal',
+          isSingleSelect: true,
+          options: pedasAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+        });
+      }
+
+      // 5. Topping & Lauk Tambahan (Multi-Select)
+      if (toppingAddOns.length > 0) {
+        addOnGroups.push({
+          id: 'group-topping-food',
+          name: '🍳 Ekstra Topping & Lauk Tambahan',
+          isSingleSelect: false,
+          options: toppingAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+        });
+      }
+
+      // 6. Level Es / Suhu
+      if (iceAddOns.length > 0) {
+        addOnGroups.push({
+          id: 'group-ice',
+          name: isDrink ? '🧊 Pilihan Level Es / Suhu' : '🧊 Level Es & Suhu Minuman',
+          isSingleSelect: true,
+          options: iceAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+        });
+      }
+
+      // 7. Level Gula / Manis
+      if (sugarAddOns.length > 0) {
+        addOnGroups.push({
+          id: 'group-sugar',
+          name: isDrink ? '🍬 Pilihan Level Gula' : '🍬 Level Manis Minuman',
+          isSingleSelect: true,
+          options: sugarAddOns.map(a => ({ id: a.id, name: a.name, price: Number(a.price || 0) })),
+        });
       }
 
       return {
@@ -385,12 +420,21 @@ export const fetchSupabaseMenuItems = async (): Promise<MenuItem[]> => {
         categoryName: item.category || 'Menu Utama',
         image: item.imageUrl || getFallbackImage(categorySlug),
         tags: ['Terlaris'],
-        isAvailable: item.isActive,
+        isAvailable: item.isActive !== undefined ? Boolean(item.isActive) : true,
         preparationTimeMinutes: 7,
         variantGroups: [],
         addOnGroups,
+        allowedAddOnCategories: item.allowedAddOnCategories || [],
         _rawCategory: item.category,
       } as MenuItem & { _rawCategory: string };
+    });
+
+    // Sort items hierarchically by category rank, then by price descending, then name ascending
+    mappedItems.sort((a, b) => {
+      const rankA = getCategorySortRank(a.categoryName || a.categoryId);
+      const rankB = getCategorySortRank(b.categoryName || b.categoryId);
+      if (rankA !== rankB) return rankA - rankB;
+      return (b.price || 0) - (a.price || 0) || a.name.localeCompare(b.name);
     });
 
     return mappedItems;

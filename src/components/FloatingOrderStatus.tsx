@@ -120,9 +120,17 @@ export const FloatingOrderStatus: React.FC = () => {
     const interval = setInterval(doImmediateCheck, 15000);
     pollingIntervalRef.current = interval;
 
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        doImmediateCheck();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
       realtimeChannelRef.current = null;
       pollingIntervalRef.current = null;
     };

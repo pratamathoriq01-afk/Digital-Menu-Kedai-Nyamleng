@@ -15,14 +15,14 @@ import {
 import { useCartStore } from '@/store/useCartStore';
 import { getCategorySortRank, getCategoryIcon } from '@/services/supabaseMenuService';
 
-// Icon mapping for each known category slug from Kasir App
 const SLUG_ICON_MAP: Record<string, React.ReactNode> = {
+  'paket-hemat': <Package className="w-4 h-4" />,
   'ayam-nyamleng': <Drumstick className="w-4 h-4" />,
   'ikan-nyamleng': <Fish className="w-4 h-4" />,
-  'minuman': <Coffee className="w-4 h-4" />,
+  'menu-tahu-tempe': <UtensilsCrossed className="w-4 h-4" />,
   'alacarte': <UtensilsCrossed className="w-4 h-4" />,
   'snack': <Cookie className="w-4 h-4" />,
-  'paket-hemat': <Package className="w-4 h-4" />,
+  'minuman': <Coffee className="w-4 h-4" />,
   'dessert': <IceCream className="w-4 h-4" />,
   'makanan': <UtensilsCrossed className="w-4 h-4" />,
   'promo': <Sparkles className="w-4 h-4" />,

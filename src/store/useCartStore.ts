@@ -206,20 +206,52 @@ export const useCartStore = create<CartState>()(
         // Auto schedule checking against WIB (UTC+7)
         try {
           const now = new Date();
-          const options: Intl.DateTimeFormatOptions = { 
+          const dayOptions: Intl.DateTimeFormatOptions = {
+            timeZone: 'Asia/Jakarta',
+            weekday: 'long',
+          };
+          const rawDay = new Intl.DateTimeFormat('id-ID', dayOptions).format(now);
+          const currentDay = rawDay.charAt(0).toUpperCase() + rawDay.slice(1).toLowerCase();
+
+          const timeOptions: Intl.DateTimeFormatOptions = { 
             timeZone: 'Asia/Jakarta', 
             hour12: false, 
             hour: '2-digit', 
             minute: '2-digit' 
           };
-          const wibTimeString = new Intl.DateTimeFormat('id-ID', options).format(now);
+          const wibTimeString = new Intl.DateTimeFormat('id-ID', timeOptions).format(now);
           const [currentH, currentM] = wibTimeString.split(':').map(Number);
           const currentMins = (currentH || 0) * 60 + (currentM || 0);
 
-          const [openH, openM] = (settings.openTime || '08:00').split(':').map(Number);
+          let targetOpenTime = settings.openTime || '08:00';
+          let targetCloseTime = settings.closeTime || '22:00';
+
+          // If weeklySchedule is configured from Kasir App, inspect today's schedule
+          if (settings.weeklySchedule) {
+            try {
+              const scheduleList = typeof settings.weeklySchedule === 'string'
+                ? JSON.parse(settings.weeklySchedule)
+                : settings.weeklySchedule;
+
+              if (Array.isArray(scheduleList)) {
+                const todayConfig = scheduleList.find(
+                  (d: any) => String(d.dayName || '').toLowerCase() === currentDay.toLowerCase()
+                );
+                if (todayConfig) {
+                  if (todayConfig.isOpen === false) return false;
+                  if (todayConfig.openTime) targetOpenTime = todayConfig.openTime;
+                  if (todayConfig.closeTime) targetCloseTime = todayConfig.closeTime;
+                }
+              }
+            } catch (err) {
+              console.warn('[isStoreOpen weeklySchedule parse error]:', err);
+            }
+          }
+
+          const [openH, openM] = targetOpenTime.split(':').map(Number);
           const openMins = (openH || 0) * 60 + (openM || 0);
 
-          const [closeH, closeM] = (settings.closeTime || '22:00').split(':').map(Number);
+          const [closeH, closeM] = targetCloseTime.split(':').map(Number);
           const closeMins = (closeH || 0) * 60 + (closeM || 0);
 
           if (openMins <= closeMins) {
@@ -241,8 +273,31 @@ export const useCartStore = create<CartState>()(
             fetchSupabaseVouchers(),
             fetchSupabaseStoreSettings(),
           ]);
+
+          // Reconcile items currently in cart against live menu items from Kasir App
+          const currentCart = get().cartItems;
+          let reconciledCart = currentCart;
+          if (currentCart.length > 0 && items.length > 0) {
+            reconciledCart = currentCart.map((cartItem) => {
+              const liveItem = items.find((m) => m.id === cartItem.menuItem.id);
+              if (!liveItem) return cartItem;
+
+              const addOnsCost = (cartItem.selectedAddOns || []).reduce((sum, a) => sum + (a.price || 0), 0);
+              const variantsCost = (cartItem.selectedVariants || []).reduce((sum, v) => sum + (v.priceModifier || 0), 0);
+              const updatedUnitPrice = liveItem.price + addOnsCost + variantsCost;
+
+              return {
+                ...cartItem,
+                menuItem: liveItem,
+                unitPrice: updatedUnitPrice,
+                subtotal: updatedUnitPrice * cartItem.quantity,
+              };
+            });
+          }
+
           set({
             menuItems: items,
+            cartItems: reconciledCart,
             availableVouchers: vouchers && vouchers.length > 0 ? vouchers : get().availableVouchers,
             storeSettings: settings || get().storeSettings,
             isLoadingMenu: false,
